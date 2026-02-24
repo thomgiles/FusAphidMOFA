@@ -1,0 +1,51 @@
+"KEGG.id","Entry.type","KEGG.name","p.score"
+"1.1.1.23","enzyme","histidinol dehydrogenase",1e-06
+"3.1.3.15","enzyme","histidinol-phosphatase",1e-06
+"3.5.1.16","enzyme","acetylornithine deacetylase",1e-06
+"R00330","reaction","ATP:GDP phosphotransferase",1e-06
+"R00335","reaction","GTP phosphohydrolase",1e-06
+"R00677","reaction","L-tryptophan:oxygen oxidoreductase (deaminati...",1e-06
+"R00684","reaction","L-tryptophan:2-oxoglutarate aminotransferase",1e-06
+"R00688","reaction","L-phenylalanine:NAD+ oxidoreductase (deaminat...",1e-06
+"R00689","reaction","L-phenylalanine:oxygen oxidoreductase (deamin...",1e-06
+"R00692","reaction","L-phenylalanine:pyruvate aminotransferase",1e-06
+"R00694","reaction","L-phenylalanine:2-oxoglutarate aminotransfera...",1e-06
+"R00782","reaction","L-cysteine hydrogen-sulfide-lyase (deaminatin...",1e-06
+"R00823","reaction","anthranilate,NADH:oxygen oxidoreductase (1,2-...",1e-06
+"R00825","reaction","anthranilate,NADPH:oxygen oxidoreductase (1,2...",1e-06
+"R00891","reaction","L-serine hydro-lyase (adding hydrogen sulfide...",1e-06
+"R00892","reaction","L-cysteine:NAD+ oxidoreductase",1e-06
+"R00985","reaction","chorismate pyruvate-lyase (amino-accepting",1e-06
+"R00986","reaction","chorismate pyruvate-lyase (amino-accepting)",1e-06
+"R01113","reaction","glutathione:L-cystine oxidoreductase",1e-06
+"R01158","reaction","L-histidinol:NAD+ oxidoreductase",1e-06
+"R01180","reaction","butanoyl-CoA:glyoxylate C-butanoyltransferase...",1e-06
+"R01373","reaction","prephenate hydro-lyase (decarboxylating",1e-06
+"R01974","reaction","3-(indol-3-yl)pyruvate carboxy-lyase [(2-indo...",1e-06
+"R02201","reaction","L-pipecolate:NAD+ 2-oxidoreductase",1e-06
+"R02203","reaction","L-pipecolate:NADP+ 2-oxidoreductase",1e-06
+"R02204","reaction","L-pipecolate:oxygen 1,6-oxidoreductase",1e-06
+"R02205","reaction","L-pipecolate:(acceptor) 1,6-oxidoreductase",1e-06
+"R02409","reaction","coenzyme A:oxidized-glutathione oxidoreductas...",1e-06
+"R03012","reaction","L-histidinol:NAD+ oxidoreductase",1e-06
+"R03013","reaction","L-histidinol-phosphate phosphohydrolase",1e-06
+"R07245","reaction","carbamoyl-phosphate:N2-acetyl-L-ornithine car...",1e-06
+"R07605","reaction","7-aminomethyl-7-carbaguanine:NADP+ oxidoreduc...",1e-06
+"R08414","reaction","(S)-2,3,4,5-Tetrahydropyridine-2-carboxylate ...",1e-06
+"R09107","reaction","N-acetyl-L-citrulline amidohydrolase",1e-06
+"R09978","reaction","7-carboxy-7-carbaguanine:ammonia ligase (ADP-...",1e-06
+"R10180","reaction","L-tryptophan:pyruvate aminotransferase",1e-06
+"R10181","reaction","indole-3-pyruvate,NADPH:oxygen oxidoreductase...",1e-06
+"R12055","reaction","L-methionine:indole-3-pyruvic acid aminotrans...",1e-06
+"C00035","compound","GDP",1e-06
+"C00082","compound","L-Tyrosine",1e-06
+"C00097","compound","L-Cysteine",1e-06
+"C00108","compound","Anthranilate",1e-06
+"C00166","compound","Phenylpyruvate",1e-06
+"C00331","compound","Indolepyruvate",1e-06
+"C00408","compound","L-Pipecolate",1e-06
+"C00491","compound","L-Cystine",1e-06
+"C00860","compound","L-Histidinol",1e-06
+"C01989","compound","3-Ethylmalate",1e-06
+"C15532","compound","N-Acetyl-L-citrulline",1e-06
+"C15996","compound","7-Cyano-7-carbaguanine",1e-06

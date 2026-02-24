@@ -1,0 +1,36 @@
+"KEGG.id","Entry.type","KEGG.name","p.score"
+"hde00020","pathway","Citrate cycle (TCA cycle) - Candidatus Hamilt...",0.028653513318302
+"hde00620","pathway","Pyruvate metabolism - Candidatus Hamiltonella...",0.00441031736093527
+"hde01210","pathway","2-Oxocarboxylic acid metabolism - Candidatus ...",1e-06
+"hde01230","pathway","Biosynthesis of amino acids - Candidatus Hami...",1e-06
+"M00005","module","PRPP biosynthesis, ribose 5P => PRPP",0.0424315969539167
+"M00010","module","Citrate cycle, first carbon oxidation, oxaloa...",0.000562480748403031
+"M00011","module","Citrate cycle, second carbon oxidation, 2-oxo...",0.0224681336270354
+"M00307","module","Pyruvate oxidation, pyruvate => acetyl-CoA",0.0104286179616235
+"2.6.1.2","enzyme","alanine transaminase",1e-06
+"2.6.1.66","enzyme","valine---pyruvate transaminase",1e-06
+"R00210","reaction","pyruvate:NADP+ 2-oxidoreductase (CoA-acetylat...",0.0331153926728942
+"R01088","reaction","L-leucine:NAD+ oxidoreductase (deaminating)",1e-06
+"R01090","reaction","L-leucine:2-oxoglutarate aminotransferase",1e-06
+"R01210","reaction","3-methyl-2-oxobutanoate:NAD+ oxidoreductase (...",0.00619591041413363
+"R01213","reaction","acetyl-CoA:3-methyl-2-oxobutanoate C-acetyltr...",1e-06
+"R01214","reaction","L-valine:2-oxoglutarate aminotransferase",0.00297912925426392
+"R01215","reaction","L-valine:pyruvate aminotransferase",0.0102213085852632
+"R01434","reaction","L-valine:NAD+ oxidoreductase(deaminating)",0.0138047308435008
+"R01651","reaction","4-methyl-2-oxopentanoate:NAD+ oxidoreductase ...",1e-06
+"R01652","reaction","4-Methyl-2-oxopentanoate + CO2 <=> (2S)-2-Iso...",1e-06
+"R01702","reaction","4-methyl-2-oxopentanoate:[dihydrolipoyllysine...",0.00138955649873098
+"R03968","reaction","2-isopropylmalate hydro-lyase",1e-06
+"R04001","reaction","3-isopropylmalate hydro-lyase",1e-06
+"R04426","reaction","(2R,3S)-3-isopropylmalate:NAD+ oxidoreductase",1e-06
+"R07160","reaction","3-methyl-2-oxobutanoate:ferredoxin oxidoreduc...",0.00977663885699142
+"R07601","reaction","4-Methyl-2-oxopentanoate + Thiamin diphosphat...",0.0116128816670476
+"R08566","reaction","4-methyl-2-oxopentanoate:ferredoxin oxidoredu...",2.41164944931529e-06
+"R10052","reaction","(2R,3S)-3-isopropylmalate:NAD+ oxidoreductase",1e-06
+"R10170","reaction","(2R,3S)-3-isopropylmalate hydro-lyase (2-isop...",1e-06
+"C00141","compound","3-Methyl-2-oxobutanoic acid",0.000142646834441821
+"C00233","compound","4-Methyl-2-oxopentanoate",1e-06
+"C02504","compound","alpha-Isopropylmalate",1e-06
+"C02631","compound","2-Isopropylmaleate",1e-06
+"C04236","compound","(2S)-2-Isopropyl-3-oxosuccinate",1e-06
+"C04411","compound","(2R,3S)-3-Isopropylmalate",1e-06

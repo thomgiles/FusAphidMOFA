@@ -1,0 +1,51 @@
+"KEGG.id","Entry.type","KEGG.name","p.score"
+"2.4.2.22","enzyme","xanthine phosphoribosyltransferase",1e-06
+"2.4.2.8","enzyme","hypoxanthine phosphoribosyltransferase",1e-06
+"6.3.2.3","enzyme","glutathione synthase",1e-06
+"R00036","reaction","5-aminolevulinate hydro-lyase (adding 5-amino...",1e-06
+"R00483","reaction","L-aspartate:ammonia ligase (AMP-forming)",1e-06
+"R00485","reaction","L-asparagine amidohydrolase",1e-06
+"R00497","reaction","gamma-L-glutamyl-L-cysteine:glycine ligase (A...",1e-06
+"R00578","reaction","L-aspartate:L-glutamine amido-ligase (AMP-for...",1e-06
+"R00830","reaction","succinyl-CoA:glycine C-succinyltransferase (d...",1e-06
+"R00894","reaction","L-glutamate:L-cysteine gamma-ligase (ADP-form...",1e-06
+"R01130","reaction","IMP:NAD+ oxidoreductase",1e-06
+"R01132","reaction","IMP:diphosphate phospho-D-ribosyltransferase",1e-06
+"R01150","reaction","D-alanine:D-alanine ligase (ADP-forming)",1e-06
+"R01229","reaction","GMP:diphosphate 5-phospho-alpha-D-ribosyltran...",1e-06
+"R01248","reaction","L-proline:NAD+ 5-oxidoreductase",1e-06
+"R01251","reaction","L-proline:NADP+ 5-oxidoreductase",1e-06
+"R02025","reaction","L-methionine:oxidized-thioredoxin S-oxidoredu...",1e-06
+"R02412","reaction","ATP:shikimate 3-phosphotransferase",1e-06
+"R04173","reaction","3-phosphoserine:2-oxoglutarate aminotransfera...",1e-06
+"R07463","reaction","glycine:oxygen oxidoreductase",1e-06
+"R10246","reaction","L-tyrosine 4-methylphenol-lyase (2-iminoaceta...",1e-06
+"R10507","reaction","L-proline:(acceptor) oxidoreductase",1e-06
+"C00130","compound","IMP",1e-06
+"C00148","compound","L-Proline",1e-06
+"C00152","compound","L-Asparagine",1e-06
+"C00242","compound","Guanine",1e-06
+"C00262","compound","Hypoxanthine",1e-06
+"C00279","compound","D-Erythrose 4-phosphate",1e-06
+"C00365","compound","dUMP",1e-06
+"C00430","compound","5-Aminolevulinate",1e-06
+"C00532","compound","L-Arabitol",1e-06
+"C00561","compound","Mandelonitrile",1e-06
+"C00669","compound","gamma-L-Glutamyl-L-cysteine",1e-06
+"C00931","compound","Porphobilinogen",1e-06
+"C00993","compound","D-Alanyl-D-alanine",1e-06
+"C01168","compound","Pseudouridine 5'-phosphate",1e-06
+"C01197","compound","Caffeate",1e-06
+"C01909","compound","Dethiobiotin",1e-06
+"C02989","compound","L-Methionine S-oxide",1e-06
+"C03175","compound","Shikimate 3-phosphate",1e-06
+"C03232","compound","3-Phosphonooxypyruvate",1e-06
+"C03912","compound","(S)-1-Pyrroline-5-carboxylate",1e-06
+"C05366","compound","(+)-Pinoresinol",1e-06
+"C11434","compound","2-C-Methyl-D-erythritol 4-phosphate",1e-06
+"C11512","compound","Methyl jasmonate",1e-06
+"C15556","compound","L-3,4-Dihydroxybutan-2-one 4-phosphate",1e-06
+"C15809","compound","Iminoglycine",1e-06
+"C16675","compound","7-Aminomethyl-7-carbaguanine",1e-06
+"C18027","compound","(4R,7S)-7-Isopropyl-4-methyloxepan-2-one",1e-06
+"C21016","compound","Ophthalmate",1e-06

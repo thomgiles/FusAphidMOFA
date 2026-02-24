@@ -1,0 +1,51 @@
+"KEGG.id","Entry.type","KEGG.name","p.score"
+"api00330","pathway","Arginine and proline metabolism - Acyrthosiph...",1e-06
+"api01232","pathway","Nucleotide metabolism - Acyrthosiphon pisum (...",1e-06
+"api04382","pathway","Cornified envelope formation - Acyrthosiphon ...",1e-06
+"M00051","module","De novo pyrimidine biosynthesis, glutamine (+...",1e-06
+"1.14.11.2","enzyme","procollagen-proline 4-dioxygenase",1e-06
+"1.3.5.2","enzyme","dihydroorotate dehydrogenase (quinone)",1e-06
+"2.1.3.2","enzyme","aspartate carbamoyltransferase",1e-06
+"2.3.2.13","enzyme","protein-glutamine gamma-glutamyltransferase",1e-06
+"3.1.3.5","enzyme","5'-nucleotidase",1e-06
+"3.4.21.75","enzyme","furin",1e-06
+"3.4.22.40","enzyme","bleomycin hydrolase",1e-06
+"3.5.2.3","enzyme","dihydroorotase",1e-06
+"3.5.4.12","enzyme","dCMP deaminase",1e-06
+"6.3.4.2","enzyme","CTP synthase (glutamine hydrolysing)",1e-06
+"6.3.5.4","enzyme","asparagine synthase (glutamine-hydrolysing)",1e-06
+"R00256","reaction","L-glutamine amidohydrolase",1e-06
+"R00552","reaction","L-arginine iminohydrolase",1e-06
+"R00671","reaction","L-ornithine ammonia-lyase (cyclizing",1e-06
+"R00974","reaction","cytosine aminohydrolase",1e-06
+"R01244","reaction","adenine aminohydrolase",1e-06
+"R01252","reaction","L-proline,2-oxoglutarate:oxygen oxidoreductas...",1e-06
+"R01398","reaction","carbamoyl-phosphate:L-ornithine carbamoyltran...",1e-06
+"R01648","reaction","4-aminobutanoate:2-oxoglutarate aminotransfer...",1e-06
+"R01663","reaction","dCMP aminohydrolase",1e-06
+"R01777","reaction","succinyl-CoA:L-homoserine O-succinyltransfera...",1e-06
+"R01855","reaction","2'-deoxyguanosine 5'-triphosphate diphosphohy...",1e-06
+"R01857","reaction","ATP:dGDP phosphotransferase",1e-06
+"R01858","reaction","dGTP:pyruvate 2-O-phosphotransferase",1e-06
+"R01867","reaction","(S)-dihydroorotate:fumarate oxidoreductase",1e-06
+"R01868","reaction","(S)-dihydroorotate:quinone oxidoreductase",1e-06
+"R01869","reaction","(S)-dihydroorotate:NAD+ oxidoreductase",1e-06
+"R01884","reaction","creatinine amidohydrolase",1e-06
+"R01939","reaction","L-2-aminoadipate:2-oxoglutarate aminotransfer...",1e-06
+"R01974","reaction","3-(indol-3-yl)pyruvate carboxy-lyase [(2-indo...",1e-06
+"R01989","reaction","L-arginine:4-aminobutanoate amidinotransferas...",1e-06
+"R01993","reaction","(S)-dihydroorotate amidohydrolase",1e-06
+"R02090","reaction","ATP:dGMP phosphotransferase",1e-06
+"R02173","reaction","tryptamine:oxygen oxidoreductase(deaminating)",1e-06
+"R02278","reaction","2-dehydro-3-deoxy-L-arabinonate hydro-lyase",1e-06
+"R02279","reaction","5-dehydro-4-deoxy-D-glucarate hydro-lyase (de...",1e-06
+"R02754","reaction","5-dehydro-4-deoxy-D-glucarate tartronate-semi...",1e-06
+"R02922","reaction","creatinine iminohydrolase",1e-06
+"R03018","reaction","ATP:pantothenate 4'-phosphotransferase",1e-06
+"R03341","reaction","4-hydroxyphenylpyruvate carboxy-lyase",1e-06
+"R08606","reaction","Indole-3-acetaldehyde oxime <=> Indole-3-acet...",1e-06
+"R10046","reaction","nicotinate D-ribonucleoside ribohydrolase",1e-06
+"R10089","reaction","D-ribose 5-phosphate,D-glyceraldehyde 3-phosp...",1e-06
+"R10178","reaction","4-aminobutanoate:pyruvate aminotransferase",1e-06
+"R11819","reaction","trans-4-hydroxy-L-proline hydro-lyase",1e-06
+"R13308","reaction","L-arginine aminodihydrolase (L-ornithine-form...",1e-06
