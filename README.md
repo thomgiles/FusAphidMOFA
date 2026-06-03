@@ -2,6 +2,8 @@
 
 This repository is the publication archive for the Fusarium-aphid multi-omics MOFA analysis. It contains the analysis code, the input workbook, curated annotation caches, and the deposited result tree used for the manuscript.
 
+The manuscript workbook is the demonstration input for rerunning the published analysis.
+
 The main workflow lives in `MOFA-CORE.R`. `MOFA-Aphid.R` is the top-level runner used to execute the analysis from the repository root.
 
 ## Repository Layout
