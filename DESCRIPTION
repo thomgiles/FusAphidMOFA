@@ -1,0 +1,67 @@
+Package: FusAphidMOFA
+Type: Project
+Title: MOFA Analysis for Fusarium-Aphid Multi-Omics Study
+Version: 1.0.0
+Authors@R: person(given = "Publication", family = "Authors", role = c("aut", "cre"))
+Description: Standalone R project containing the source code, input workbook,
+    annotation caches, trained MOFA model, and generated outputs for the
+    Fusarium-aphid multi-omics analysis.
+License: GPL-3
+Encoding: UTF-8
+Depends:
+    R (>= 4.4.2)
+Imports:
+    BiocManager,
+    ComplexHeatmap,
+    DESeq2,
+    FELLA,
+    GGally,
+    KEGGREST,
+    MOFA2,
+    MSnbase,
+    VIM,
+    XML,
+    biomaRt,
+    clusterProfiler,
+    data.table,
+    dplyr,
+    fgsea,
+    ggraph,
+    ggforce,
+    ggkegg,
+    ggplot2,
+    ggpubr,
+    ggtext,
+    grid,
+    gridExtra,
+    gridGraphics,
+    gtable,
+    httr,
+    httr2,
+    igraph,
+    jsonlite,
+    limma,
+    magick,
+    matrixStats,
+    openxlsx,
+    pathview,
+    png,
+    preprocessCore,
+    psych,
+    purrr,
+    readr,
+    readxl,
+    reshape2,
+    rgoslin,
+    scales,
+    stats,
+    stringi,
+    stringr,
+    sva,
+    textclean,
+    tibble,
+    tidygraph,
+    tidyr,
+    tximport,
+    viridis,
+    writexl

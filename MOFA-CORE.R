@@ -8,6 +8,10 @@ setup_project_environment <- function(use_renv = TRUE,
                                       renv_path = "renv") {
   print("Initialising project environment...")
   
+  if (isTRUE(getOption("repos")[["CRAN"]]) || identical(getOption("repos")[["CRAN"]], "@CRAN@")) {
+    options(repos = c(CRAN = "https://cloud.r-project.org"))
+  }
+  
   if (use_renv) {
     if (!requireNamespace("renv", quietly = TRUE)) {
       install.packages("renv")
@@ -16,12 +20,12 @@ setup_project_environment <- function(use_renv = TRUE,
       print("'renv' already installed.")
     }
     
-    if (!file.exists(file.path(renv_path, "renv.lock"))) {
-      print("Initialising new renv environment...")
-      renv::init(bare = TRUE)
-    } else {
+    renv_lock <- if (file.exists(file.path(renv_path, "renv.lock"))) file.path(renv_path, "renv.lock") else "renv.lock"
+    if (file.exists(renv_lock)) {
       print("Restoring existing renv environment...")
       renv::restore(prompt = FALSE)
+    } else {
+      print("No renv.lock found; continuing without restore.")
     }
   }
   
@@ -35,6 +39,7 @@ setup_project_environment <- function(use_renv = TRUE,
   cran_packages <- c(
     "data.table",
     "ggplot2",
+    "mvtnorm",
     "psych",
     "dplyr",
     "ggpubr",
@@ -54,8 +59,6 @@ setup_project_environment <- function(use_renv = TRUE,
     "gridExtra",
     "gridGraphics",
     "stats",
-    "clusterProfiler",
-    "pathview",
     "magick",
     "tibble",
     "tidygraph",
@@ -83,6 +86,8 @@ setup_project_environment <- function(use_renv = TRUE,
     "KEGGREST",
     "MSnbase",
     "clusterProfiler",
+    "pathview",
+    "preprocessCore",
     "ggkegg",
     "rgoslin",
     "fgsea",
@@ -107,7 +112,7 @@ setup_project_environment <- function(use_renv = TRUE,
   install_bioc <- function(pkg) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
       print(paste("Installing Bioconductor package:", pkg))
-      BiocManager::install(pkg, ask = FALSE, update = TRUE)
+      BiocManager::install(pkg, ask = FALSE, update = FALSE)
     } else {
       print(paste("Bioconductor package already installed:", pkg))
     }
@@ -130,7 +135,7 @@ setup_project_environment <- function(use_renv = TRUE,
 import_view_metadata <- function(input_file){
   print("Reading metadata sheet...")
   
-  view_metadata <- as.data.frame(read_excel(input_file, sheet = "view_metadata"))
+  view_metadata <- as.data.frame(readxl::read_excel(input_file, sheet = "view_metadata"))
   return(view_metadata)
 }
 
@@ -140,7 +145,7 @@ import_sample_metadata <- function(input_file, view_metadata){
   
   metadata_sheet <- view_metadata$View[view_metadata$Type =="sample_metadata"]
   if(!is.null(metadata_sheet)){
-    metadata_list <- as.data.frame(read_excel(input_file, sheet = metadata_sheet))
+    metadata_list <- as.data.frame(readxl::read_excel(input_file, sheet = metadata_sheet))
     
     # Set first column ("Name") as rownames
     rownames(metadata_list) <- metadata_list$Name
@@ -3601,7 +3606,7 @@ run_fella_enrichment <- function(factor_name, view_metadata, fella_list, TERM2GE
 # ==== Initialise the environment ====
 
 # Sets up project environment, optionally with renv support
-setup_project_environment(use_renv = FALSE)
+setup_project_environment(use_renv = TRUE)
 
 
 # ==== Load and pre-process sample metadata ====
@@ -3756,6 +3761,3 @@ for (factor_name in factors) {
 }
 
 print("Go Have a party, we are done here...")
-
-
-
