@@ -1,18 +1,21 @@
-# FusAphidMOFA
+# UoN DRS MOFA
 
-This repository is the publication archive for the Fusarium-aphid multi-omics MOFA analysis. It contains the analysis code, the input workbook, curated annotation caches, and the deposited result tree used for the manuscript.
+This repository is a publication archive for a multi-omics MOFA analysis. It contains the analysis code, the input workbook, curated annotation caches, and the deposited result tree used for the manuscript.
 
 The manuscript workbook is the demonstration input for rerunning the published analysis.
 
-The main workflow lives in `MOFA-CORE.R`. `MOFA-Aphid.R` is the top-level runner used to execute the analysis from the repository root.
+The main workflow lives in `MOFA-CORE.R`. A project-specific runner script can be used to execute the analysis from the repository root.
 
 ## Repository Layout
 
 | Path | Purpose |
 | --- | --- |
 | `MOFA-CORE.R` | Main analysis file containing the functions and the publication workflow. |
-| `MOFA-Aphid.R` | Runner script that sources the core workflow. |
-| `Input/Aphids and honeydew from exposure to niv MOFA.xlsx` | Analysis workbook. |
+| `<project-analysis-runner>.R` | Optional project-specific runner script that sources the core workflow. |
+| `MOFA-report.Rmd` | Dynamic report source that can render the deposited outputs and, optionally, run the analysis function chain. |
+| `MOFA-report-runner.R` | Command-line helper for rendering `MOFA-report.Rmd`. |
+| `MOFA-report.html` | Rendered HTML report, when generated. |
+| `Input/*.xlsx` | Analysis workbook. The report runner can auto-detect a single workbook in this directory or accept one with `--input-file`. |
 | `Annotations/` | KEGG, lipid, and FELLA annotation caches. |
 | `Results/` | Deposited analysis outputs and trained model. |
 | `renv/` | Project-local R environment support. |
@@ -57,7 +60,7 @@ Typical setup time on a normal desktop is on the order of tens of minutes if pac
 Run the publication workflow from the repository root:
 
 ```bash
-Rscript MOFA-Aphid.R
+Rscript <project-analysis-runner>.R
 ```
 
 The runner clears `./Results` before execution and then rebuilds the analysis outputs in place.
@@ -66,7 +69,7 @@ Important:
 
 - run this from the repository root
 - back up `Results/` first if you want to keep the deposited snapshot unchanged
-- the workflow assumes the workbook is present at `Input/Aphids and honeydew from exposure to niv MOFA.xlsx`
+- the workflow assumes a compatible workbook is present under `Input/`
 
 ## Input Workbook
 
@@ -96,10 +99,89 @@ The published outputs live under `Results/`. Key directories include:
 
 The exact output map is captured in `MANIFEST.md`.
 
+## Dynamic HTML Report
+
+The repository includes a dynamic HTML report that turns the deposited `Results/` tree into a browsable analysis document. The report is generated from `MOFA-report.Rmd` and is rendered through `MOFA-report-runner.R`.
+
+By default, the report only reads the existing files under `Results/`. It does not rerun the analysis and does not modify the result tree:
+
+```bash
+Rscript MOFA-report-runner.R
+```
+
+This writes `MOFA-report.html` in the repository root. The report is branded as `UoN DRS MOFA` and is organised as one nested tab tree: `Overview`, `Results`, and `Analysis information`. The `Results` tab follows the result directory structure, with subtabs for the MOFA-CORE execution flow, output directories, and image collections. By default, CSV/TSV outputs are shown as 50-row previews to keep rendering fast.
+
+Render full CSV/TSV table contents, split into 50-row table tabs:
+
+```bash
+Rscript MOFA-report-runner.R --full-tables
+```
+
+To run the analysis function chain before rendering the report, use:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis
+```
+
+If there is more than one workbook under `Input/`, specify the workbook explicitly:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis --input-file "Input/<analysis workbook>.xlsx"
+```
+
+With `--run-analysis`, the Rmd sources the function definitions from `MOFA-CORE.R`, calls `setup_project_environment(use_renv = TRUE)`, rebuilds the in-memory analysis objects, and then calls the remaining workflow functions in the publication order. Output-producing steps are skipped when their mapped files or directories already exist, unless `--force` is supplied.
+
+Force regeneration of mapped output-producing steps:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis --force
+```
+
+Render to a named output file:
+
+```bash
+Rscript MOFA-report-runner.R --output MOFA-report-review.html
+```
+
+Limit image previews in the report:
+
+```bash
+Rscript MOFA-report-runner.R --max-images 50
+```
+
+Explicitly include every image:
+
+```bash
+Rscript MOFA-report-runner.R --all-images
+```
+
+Use the newer normalisation path instead of the publication default:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis --new-normalisation
+```
+
+Runner options:
+
+| Option | Behaviour |
+| --- | --- |
+| `--run-analysis` | Run the `MOFA-CORE.R` workflow functions inside the Rmd before rendering the report. Without this flag, the report only presents existing outputs. |
+| `--force` | Rebuild mapped output-producing steps even when expected files already exist. Only relevant with `--run-analysis`. |
+| `--new-normalisation` | Use the newer normalisation branch. The default is the publication normalisation path. Only relevant with `--run-analysis`. |
+| `--input-file FILE` | Workbook to use when `--run-analysis` is supplied. If omitted, the Rmd auto-detects a single workbook under `Input/`. |
+| `--full-tables` | Render full CSV/TSV table contents, split into 50-row tabs. Without this flag, table previews are limited to 50 rows for faster rendering. |
+| `--all-images` | Include every image preview in the report. This is also the current default. |
+| `--max-images N` | Include at most `N` image previews. File tables still list the omitted images. |
+| `--output FILE` | Write the rendered report to `FILE` instead of `MOFA-report.html`. |
+| `--help` or `-h` | Print the runner help text. |
+
+Report dependencies are `rmarkdown` and `knitr`, in addition to the analysis dependencies declared in `DESCRIPTION`. When `--run-analysis` is used, the full analysis environment must be available because the report calls the same core functions used by the project-specific analysis runner.
+
 ## Reproducibility Notes
 
 - `MOFA-CORE.R` contains the analysis implementation used for the publication archive.
-- `MOFA-Aphid.R` is the top-level entrypoint for rerunning the workflow.
+- The project-specific analysis runner is the top-level entrypoint for rerunning the full workflow outside the report.
+- `MOFA-report.Rmd` is the report entrypoint for browsing deposited outputs and optionally rerunning the workflow function chain with skipped existing outputs.
 - `Annotations/` contains cached KEGG, lipid, and FELLA resources so the analysis can run without rebuilding everything from scratch.
 - If those caches are removed, the workflow may need network access and will take longer.
 - The committed `renv.lock` should be used for exact package version pinning once the environment build is complete.

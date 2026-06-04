@@ -35,3 +35,9 @@ Desktop.ini
 *.log
 *.tmp
 *.bak
+
+# -----------------------------
+# Generated report / analysis caches
+# -----------------------------
+MOFA-report_files/
+Annotations/fella_db/*/graph/diffusion.matrix.RData

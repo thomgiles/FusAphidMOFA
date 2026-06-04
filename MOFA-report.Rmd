@@ -1,0 +1,1399 @@
+---
+title: "Publication archive report."
+output:
+  html_document:
+    toc: false
+    toc_depth: 3
+    number_sections: false
+    theme: flatly
+    self_contained: false
+params:
+  run_analysis: false
+  skip_existing: true
+  input_workbook: ""
+  runner: "MOFA-report-runner.R"
+  results_dir: "Results"
+  old_normalisation: true
+  full_tables: false
+  table_rows_per_tab: 50
+  max_images: .inf
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+
+repo_root <- normalizePath(getwd(), mustWork = TRUE)
+results_dir <- params$results_dir
+runner <- params$runner
+input_workbook <- params$input_workbook
+if (!nzchar(input_workbook)) {
+  workbook_candidates <- sort(list.files("Input", pattern = "\\.xlsx?$", full.names = TRUE))
+  if (length(workbook_candidates) == 1) {
+    input_workbook <- workbook_candidates[[1]]
+  } else {
+    input_workbook <- file.path("Input", "<analysis workbook>.xlsx")
+  }
+}
+
+report_kable <- function(...,
+                         table.attr = 'class="table table-striped table-condensed report-table"') {
+  knitr::kable(..., format = "html", table.attr = table.attr)
+}
+
+format_bytes <- function(x) {
+  units <- c("B", "KB", "MB", "GB")
+  value <- as.numeric(x)
+  unit <- 1L
+  while (is.finite(value) && value >= 1024 && unit < length(units)) {
+    value <- value / 1024
+    unit <- unit + 1L
+  }
+  sprintf("%.1f %s", value, units[[unit]])
+}
+
+file_type <- function(path) {
+  ext <- tolower(tools::file_ext(path))
+  if (ext %in% c("png", "jpg", "jpeg", "tif", "tiff", "svg")) return("Image")
+  if (ext %in% c("csv", "tsv", "txt")) return("Table")
+  if (ext %in% c("rds", "rdata")) return("R data")
+  if (ext %in% c("hdf5", "h5")) return("Model")
+  if (ext %in% c("xml")) return("XML")
+  if (ext %in% c("xlsx", "xls")) return("Workbook")
+  "Other"
+}
+
+section_for_file <- function(path) {
+  if (grepl("^Results/Full_MOFA_model", path)) return("Trained MOFA model")
+  if (grepl("^Results/Corrilation_and_Variance_plots/", path)) return("Global variance and correlation summaries")
+  if (grepl("^Results/PCA/", path)) return("Factor projections and loading plots")
+  if (grepl("^Results/Covariate_factor_comparisons/", path)) return("Covariate and group comparisons")
+  if (grepl("^Results/Significance_testing/", path)) return("Significance and regression summaries")
+  if (grepl("^Results/Per_Factor_Analysis/", path)) return("Per-factor interpretation outputs")
+  "Other outputs"
+}
+
+describe_file <- function(path) {
+  name <- basename(path)
+  if (name == "Full_MOFA_model.hdf5") return("Trained MOFA model saved in HDF5 format. This is the fitted latent-factor model used by the downstream plots and tables.")
+  if (name == "Variance_explained.png") return("Variance explained by each latent factor across the data views. This shows which factors capture the strongest global structure.")
+  if (grepl("Factor_vs_Covariate_corrilation_pval", name)) return("Nominal p-value summary for relationships between latent factors and sample-level covariates.")
+  if (grepl("Factor_vs_Covariate_corrilation", name)) return("Correlation between MOFA factors and sample-level covariates, used to link latent structure to experimental metadata.")
+  if (grepl("Factor_vs_Factor_corrilation", name)) return("Correlation among inferred MOFA factors. Strong correlations indicate related latent dimensions.")
+  if (grepl("Factor_vs_Sample_corrilation", name)) return("Relationship between latent factors and samples, used to inspect sample-level structure.")
+  if (grepl("category_Factor_Pair_PCA_Matrix", name)) return("Pairwise factor projection matrix showing how samples separate across combinations of latent factors.")
+  if (grepl("_density\\.png$", name)) return("Density plot showing the distribution of sample scores for one factor.")
+  if (grepl("_weights\\.png$", name)) return("Sample projection plot for a pair of latent factors.")
+  if (grepl("category_Factor_Comparison", name)) return("Group-level comparison of factor values across experimental categories.")
+  if (grepl("mean_vs_weight", name)) return("Relationship between feature means and MOFA weights for a factor, used to interpret loading behaviour.")
+  if (grepl("_violin\\.png$", name) || grepl("^Violin", name)) return("Violin plot summarising factor-associated statistics across groups or views.")
+  if (grepl("^Weights_AllViews", name)) return("Combined table of MOFA weights across all views and factors.")
+  if (grepl("^R2_", name) || grepl("R2_scatter", name)) return("Regression summary relating model statistics to factor-associated signals.")
+  if (grepl("^Scatter_", name)) return("Scatter plot comparing significance statistics with factor weights.")
+  if (name == "TopWeights_Heatmap_FacetedByView.png") return("Faceted heatmap of the strongest feature weights split by data view.")
+  if (name == "All_Weights.csv") return("Factor-specific table containing all feature weights.")
+  if (name == "Top-weights-bar.png") return("Ranked bar plot of the strongest feature weights for the factor.")
+  if (name == "Top_Weights.png") return("View-specific plot of the strongest feature weights.")
+  if (name == "Heatmap.png") return("Heatmap of the strongest factor-associated features for this view.")
+  if (name == "category_Scatter.png") return("View-specific scatter plot of feature weights for this factor.")
+  if (grepl("KEGG_Enrichment_Weighted", name)) return("Weighted KEGG enrichment table for a specific factor.")
+  if (grepl("KEGG_Enrichment", name)) return("KEGG enrichment output for a specific factor.")
+  if (grepl("Top_100_edges_KEGG_cnet", name)) return("Network visualisation of the strongest KEGG enrichment connections.")
+  if (grepl("FELLA_Enrichment", name)) return("FELLA pathway enrichment table for a factor and organism/view.")
+  if (grepl("FELLA_enrichment_graph", name)) return("FELLA graph visualisation for enriched pathway structure.")
+  if (grepl("KEGG_pathway_plots", path)) return("Pathway-level visualisation for an enriched KEGG pathway.")
+  paste("Generated", tolower(file_type(path)), "output from the MOFA analysis.")
+}
+
+section_note <- function(section) {
+  switch(
+    section,
+    "Trained MOFA model" = "The trained model is the core analysis object. It stores the latent factors and view-specific weights used throughout the downstream interpretation.",
+    "Global variance and correlation summaries" = "These outputs describe the overall structure of the fitted model: how much variation the factors explain, how factors relate to each other, and how they relate to sample metadata.",
+    "Factor projections and loading plots" = "These plots show the sample-level factor projections and feature-loading relationships. They are useful for seeing whether experimental groups separate along particular latent dimensions.",
+    "Covariate and group comparisons" = "These outputs connect inferred factors to the experimental categories. They help identify which latent factors track treatment or sample-group structure.",
+    "Significance and regression summaries" = "These outputs compare factor weights with statistical evidence, helping distinguish high-loading features that also have strong test-level support.",
+    "Per-factor interpretation outputs" = "These outputs provide the biological interpretation layer for each latent factor, including top features, heatmaps, KEGG enrichment, pathway graphics, and FELLA network summaries.",
+    "Other outputs" = "Additional files generated by the workflow.",
+    ""
+  )
+}
+
+make_inventory <- function(results_dir) {
+  if (!dir.exists(results_dir)) {
+    stop("Results directory not found: ", results_dir, call. = FALSE)
+  }
+  paths <- sort(list.files(results_dir, recursive = TRUE, full.names = TRUE, all.files = FALSE, no.. = TRUE))
+  info <- file.info(paths)
+  rel <- sub("^\\./", "", paths)
+  data.frame(
+    Path = rel,
+    Section = vapply(rel, section_for_file, character(1)),
+    Type = vapply(rel, file_type, character(1)),
+    Size = vapply(info$size, format_bytes, character(1)),
+    Bytes = as.numeric(info$size),
+    Modified = format(info$mtime, "%Y-%m-%d %H:%M:%S"),
+    Description = vapply(rel, describe_file, character(1)),
+    stringsAsFactors = FALSE
+  )
+}
+
+path_present <- function(path) {
+  if (grepl("[*?\\[]", path)) {
+    hits <- Sys.glob(path)
+    return(length(hits) > 0 && any(vapply(hits, path_present, logical(1))))
+  }
+  if (dir.exists(path)) {
+    return(length(list.files(path, recursive = TRUE, all.files = FALSE, no.. = TRUE)) > 0)
+  }
+  file.exists(path)
+}
+
+link_file <- function(path, label = basename(path)) {
+  if (file.exists(path)) {
+    sprintf('<a href="%s" target="_blank">%s</a>', path, label)
+  } else {
+    label
+  }
+}
+
+safe_table_dims <- function(path) {
+  if (!file.exists(path)) return(c(Rows = NA_integer_, Columns = NA_integer_))
+  ext <- tolower(tools::file_ext(path))
+  out <- tryCatch({
+    if (ext == "csv") {
+      dat <- utils::read.csv(path, check.names = FALSE)
+      c(Rows = nrow(dat), Columns = ncol(dat))
+    } else if (ext %in% c("tsv", "txt")) {
+      dat <- utils::read.delim(path, check.names = FALSE)
+      c(Rows = nrow(dat), Columns = ncol(dat))
+    } else if (ext %in% c("xlsx", "xls") && requireNamespace("readxl", quietly = TRUE)) {
+      sheets <- readxl::excel_sheets(path)
+      c(Rows = length(sheets), Columns = NA_integer_)
+    } else {
+      c(Rows = NA_integer_, Columns = NA_integer_)
+    }
+  }, error = function(e) c(Rows = NA_integer_, Columns = NA_integer_))
+  out
+}
+
+factor_from_path <- function(path) {
+  hit <- regmatches(path, regexpr("Factor[0-9]+", path))
+  ifelse(length(hit) == 0 || hit == "", NA_character_, hit)
+}
+
+view_from_path <- function(path) {
+  parts <- strsplit(path, "/", fixed = TRUE)[[1]]
+  factor_index <- grep("^Factor[0-9]+$", parts)
+  if (length(factor_index) > 0 && factor_index[[1]] < length(parts)) {
+    return(parts[[factor_index[[1]] + 1L]])
+  }
+  NA_character_
+}
+
+source_core_functions <- function(path = "MOFA-CORE.R", envir = parent.frame()) {
+  lines <- readLines(path, warn = FALSE)
+  execution_marker <- grep("^# CODE EXECUTION", lines)
+  if (length(execution_marker) > 0) {
+    lines <- lines[seq_len(execution_marker[[1]] - 1L)]
+  }
+  eval(parse(text = lines), envir = envir)
+  invisible(TRUE)
+}
+
+core_function_names <- {
+  lines <- readLines("MOFA-CORE.R", warn = FALSE)
+  matches <- regmatches(lines, regexpr("^[A-Za-z0-9_]+\\s*<-\\s*function", lines))
+  sub("\\s*<-\\s*function$", "", matches)
+}
+
+workflow_steps <- data.frame(
+  Order = seq_len(32),
+  Phase = c(
+    "Environment", "Import", "Import", "Import",
+    "Annotation", "Annotation", "Annotation", "Annotation", "Annotation",
+    "Normalisation", "Model", "Metadata", "Metadata", "Metadata", "Metadata",
+    "Post-processing", "Post-processing", "Post-processing",
+    "Global outputs", "Global outputs", "Global outputs", "Global outputs",
+    "Global outputs", "Global outputs", "Global outputs", "Global outputs",
+    "Per-factor outputs", "Per-factor outputs", "Per-factor outputs",
+    "Per-factor outputs", "Per-factor outputs", "Per-factor outputs"
+  ),
+  Function = c(
+    "setup_project_environment",
+    "import_view_metadata",
+    "import_sample_metadata",
+    "load_and_clean_input_data",
+    "generate_lipid_annotations",
+    "generate_kegg_annotation_lists",
+    "annotate_transcriptomic_data_with_kegg",
+    "annotate_metabolomic_data_with_kegg",
+    "load_or_build_fella_database",
+    "normalise_data_mofa_v1_or_v2",
+    "initialise_and_run_mofa",
+    "generate_sample_metadata",
+    "assign_sample_metadata_to_mofa",
+    "define_group_colours",
+    "define_view_colours",
+    "extract_kegg_weights",
+    "run_limma_statistics",
+    "standardise_feature_names",
+    "generate_mofa_variance_plots",
+    "generate_mofa_factor_matrix_plot",
+    "generate_mofa_factor_comparison_plot",
+    "generate_mofa_factor_correlation_plot",
+    "save_weight_tables",
+    "plot_scatter_pval_vs_weight",
+    "plot_violin_pval_vs_weight",
+    "plot_top_weights_heatmap_faceted_by_view",
+    "plot_top_weights_view",
+    "plot_top_weights_per_factor",
+    "plot_scatter_per_view",
+    "plot_heatmap_per_view",
+    "create_weight_outputs",
+    "perform_kegg_enrichment / plot_enrichment_network / generate_simple_pathway_graph / run_fella_enrichment"
+  ),
+  Description = c(
+    "Set up the R package environment and load required packages.",
+    "Read the workbook view metadata that defines the analysis views.",
+    "Read and transpose the sample metadata.",
+    "Read, clean, and align all active data sheets.",
+    "Generate or load lipid annotations.",
+    "Generate or load KEGG TERM2GENE and TERM2NAME resources.",
+    "Map transcriptomic features to KEGG-compatible gene identifiers.",
+    "Map metabolomic features to KEGG compound identifiers.",
+    "Load or build FELLA pathway graph resources.",
+    "Normalise each active view into MOFA-ready matrices.",
+    "Create, train, or load the MOFA model.",
+    "Derive sample categories from sample names.",
+    "Attach sample metadata to the MOFA model.",
+    "Define group colour palettes.",
+    "Define view colour palettes.",
+    "Attach KEGG-weight annotations to the MOFA object.",
+    "Run limma statistics for factor interpretation.",
+    "Create a plotting-safe MOFA object with standardised feature names.",
+    "Write global variance-explained outputs.",
+    "Write PCA/factor projection outputs.",
+    "Write covariate and group comparison outputs.",
+    "Write factor correlation and covariate-correlation outputs.",
+    "Write combined factor weight tables.",
+    "Write significance-versus-weight scatter and regression outputs.",
+    "Write significance-related violin plots.",
+    "Write faceted top-weight heatmap.",
+    "Write per-view top-weight plots for each factor.",
+    "Write factor-level top-weight bar plots.",
+    "Write per-view scatter plots for each factor.",
+    "Write per-view heatmaps for each factor.",
+    "Write per-factor weight tables and top-feature tables.",
+    "Write KEGG, pathway, enrichment-network, and FELLA outputs for each factor."
+  ),
+  stringsAsFactors = FALSE
+)
+
+workflow_outputs <- list(
+  character(0),
+  character(0),
+  character(0),
+  character(0),
+  file.path("Annotations", "Lipid.annotations.csv"),
+  file.path("Annotations", "kegg_annotation_cache"),
+  file.path("Annotations", "KEGG_gene_annotations.csv"),
+  file.path("Annotations", "KEGG_metabolite_annotations.csv"),
+  file.path("Annotations", "fella_db"),
+  character(0),
+  file.path(results_dir, "Full_MOFA_model.hdf5"),
+  character(0),
+  character(0),
+  character(0),
+  character(0),
+  character(0),
+  character(0),
+  character(0),
+  file.path(results_dir, "Corrilation_and_Variance_plots", "Variance_explained.png"),
+  file.path(results_dir, "PCA", "category_Factor_Pair_PCA_Matrix.png"),
+  file.path(results_dir, "Covariate_factor_comparisons", "category_Factor_Comparison.png"),
+  file.path(results_dir, "Corrilation_and_Variance_plots", "Factor_vs_Covariate_corrilation.png"),
+  file.path(results_dir, "Significance_testing", "tables", "Weights_AllViews_AllFactors__category.csv"),
+  file.path(results_dir, "Significance_testing", "regression_testing", "R2_scatter__category.png"),
+  file.path(results_dir, "Significance_testing", "violin_plots", "Violin__category.png"),
+  file.path(results_dir, "Per_Factor_Analysis", "TopWeights_Heatmap_FacetedByView.png"),
+  file.path(results_dir, "Per_Factor_Analysis", "Factor*", "*", "Top_Weights.png"),
+  file.path(results_dir, "Per_Factor_Analysis", "Factor*", "Top-weights-bar.png"),
+  file.path(results_dir, "Per_Factor_Analysis", "Factor*", "*", "scatterplots"),
+  file.path(results_dir, "Per_Factor_Analysis", "Factor*", "*", "Heatmap.png"),
+  file.path(results_dir, "Per_Factor_Analysis", "Factor*", "All_Weights.csv"),
+  c(
+    file.path(results_dir, "Per_Factor_Analysis", "Factor*", "KEGG_Enrichment_Weighted.csv"),
+    file.path(results_dir, "Per_Factor_Analysis", "Factor*", "Top_100_edges_KEGG_cnet.png"),
+    file.path(results_dir, "Per_Factor_Analysis", "Factor*", "*", "KEGG_pathway_plots"),
+    file.path(results_dir, "Per_Factor_Analysis", "Factor*", "*", "FELLA_Enrichment_*.csv")
+  )
+)
+
+workflow_steps$Outputs <- I(workflow_outputs)
+workflow_steps$ExpectedOutput <- vapply(workflow_steps$Outputs, function(x) {
+  if (length(x) == 0) "" else paste(x, collapse = "; ")
+}, character(1))
+workflow_steps$Present <- vapply(workflow_steps$Outputs, function(x) {
+  length(x) == 0 || all(vapply(x, path_present, logical(1)))
+}, logical(1))
+workflow_steps$Status <- ifelse(
+  lengths(workflow_steps$Outputs) == 0,
+  "object step",
+  ifelse(workflow_steps$Present, "present", "missing")
+)
+
+checkpoint_specs <- workflow_steps[lengths(workflow_steps$Outputs) > 0, c("Function", "ExpectedOutput", "Status", "Description")]
+all_checkpoints_present <- all(checkpoint_specs$Status == "present")
+
+workflow_log <- data.frame(
+  Order = integer(),
+  Function = character(),
+  Action = character(),
+  Detail = character(),
+  stringsAsFactors = FALSE
+)
+
+progress_bar_width <- 28L
+
+terminal_progress <- function(order, function_name, action) {
+  if (!isTRUE(params$run_analysis)) {
+    return(invisible(NULL))
+  }
+
+  max_order <- max(workflow_steps$Order, na.rm = TRUE)
+  total_steps <- max_order + 1L
+  step_index <- max(0L, min(as.integer(order), max_order)) + 1L
+  percent <- if (max_order == 0L) 100L else floor(100 * (step_index - 1L) / max_order)
+  filled <- floor(progress_bar_width * percent / 100)
+  bar <- paste0(strrep("=", filled), strrep(".", progress_bar_width - filled))
+  action_label <- switch(
+    action,
+    "ran" = "running",
+    "skipped" = "skipping",
+    action
+  )
+
+  line <- sprintf(
+    "[%s] %3d%% %02d/%02d %-8s %s",
+    bar,
+    percent,
+    step_index,
+    total_steps,
+    action_label,
+    function_name
+  )
+  cat("\r", substr(paste0(line, strrep(" ", 120L)), 1L, 120L), sep = "", file = stderr())
+  flush(stderr())
+  invisible(NULL)
+}
+
+terminal_progress_complete <- function() {
+  if (!isTRUE(params$run_analysis)) {
+    return(invisible(NULL))
+  }
+
+  line <- sprintf("[%s] 100%% complete", strrep("=", progress_bar_width))
+  cat("\r", substr(paste0(line, strrep(" ", 120L)), 1L, 120L), "\n", sep = "", file = stderr())
+  flush(stderr())
+  invisible(NULL)
+}
+
+quiet_eval <- function(expr) {
+  output_file <- tempfile("mofa-report-output-")
+  output_connection <- file(output_file, open = "wt")
+  sink_depth <- sink.number()
+
+  on.exit({
+    while (sink.number() > sink_depth) {
+      sink()
+    }
+    close(output_connection)
+    unlink(output_file)
+  }, add = TRUE)
+
+  sink(output_connection)
+  withCallingHandlers(
+    force(expr),
+    message = function(m) invokeRestart("muffleMessage"),
+    warning = function(w) invokeRestart("muffleWarning")
+  )
+}
+
+record_workflow <- function(order, function_name, action, detail = "") {
+  terminal_progress(order, function_name, action)
+  workflow_log <<- rbind(
+    workflow_log,
+    data.frame(
+      Order = order,
+      Function = function_name,
+      Action = action,
+      Detail = detail,
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
+outputs_present <- function(outputs) {
+  length(outputs) > 0 && all(vapply(outputs, path_present, logical(1)))
+}
+
+run_output_step <- function(order, function_name, outputs, expr) {
+  if (isTRUE(params$skip_existing) && outputs_present(outputs)) {
+    record_workflow(order, function_name, "skipped", paste(outputs, collapse = "; "))
+    return(invisible(NULL))
+  }
+  record_workflow(order, function_name, "ran", paste(outputs, collapse = "; "))
+  quiet_eval(force(expr))
+  invisible(NULL)
+}
+
+step_outputs <- function(function_name) {
+  idx <- match(function_name, workflow_steps$Function)
+  if (is.na(idx)) character(0) else workflow_steps$Outputs[[idx]]
+}
+
+analysis_action <- "not requested"
+if (isTRUE(params$run_analysis)) {
+  analysis_action <- "executed selectively from MOFA-CORE.R functions"
+  record_workflow(0L, "source_core_functions", "ran", "Loaded MOFA-CORE.R function definitions without using a project-specific runner as a black-box process.")
+  quiet_eval(source_core_functions("MOFA-CORE.R", envir = environment()))
+
+  input_file <- input_workbook
+  OLD_NORMALISATION <- isTRUE(params$old_normalisation)
+
+  record_workflow(1L, "setup_project_environment", "ran", "Environment setup and package loading.")
+  quiet_eval(setup_project_environment(use_renv = TRUE))
+
+  record_workflow(2L, "import_view_metadata", "ran", input_file)
+  view_metadata <- quiet_eval(import_view_metadata(input_file))
+
+  record_workflow(3L, "import_sample_metadata", "ran", input_file)
+  sample_metadata <- quiet_eval(import_sample_metadata(input_file, view_metadata))
+
+  record_workflow(4L, "load_and_clean_input_data", "ran", input_file)
+  data_list <- quiet_eval(load_and_clean_input_data(input_file, view_metadata))
+
+  record_workflow(5L, "generate_lipid_annotations", "ran", "Object-building step; may reuse cached annotation files.")
+  LIPID_ANNOTATIONS <- quiet_eval(generate_lipid_annotations(view_metadata, data_list))
+
+  record_workflow(6L, "generate_kegg_annotation_lists", "ran", "Object-building step; may reuse KEGG caches.")
+  KEGG_list <- quiet_eval(generate_kegg_annotation_lists(view_metadata))
+  TERM2GENE_list <- KEGG_list$TERM2GENE
+  TERM2NAME_list <- KEGG_list$TERM2NAME
+
+  record_workflow(7L, "annotate_transcriptomic_data_with_kegg", "ran", "Object-building step; may reuse gene annotation cache.")
+  gene_annotation <- quiet_eval(annotate_transcriptomic_data_with_kegg(data_list, KEGG_list$TERM2GENE, view_metadata))
+
+  record_workflow(8L, "annotate_metabolomic_data_with_kegg", "ran", "Object-building step; may reuse metabolite annotation cache.")
+  metabolite_annotation <- quiet_eval(annotate_metabolomic_data_with_kegg(data_list, KEGG_list$TERM2GENE, view_metadata))
+
+  record_workflow(9L, "load_or_build_fella_database", "ran", "Object-building step; may reuse FELLA graph caches.")
+  fella_list <- quiet_eval(load_or_build_fella_database(view_metadata))
+
+  record_workflow(10L, "normalise_data_mofa_v1_or_v2", "ran", if (OLD_NORMALISATION) "v1" else "v2")
+  if (OLD_NORMALISATION) {
+    mofa_list <- quiet_eval(normalise_data_mofa_v1(data_list))
+  } else {
+    mofa_list <- quiet_eval(normalise_data_mofa_v2(data_list, sample_metadata))
+  }
+
+  record_workflow(11L, "initialise_and_run_mofa", "ran", "Loads existing model when Results/Full_MOFA_model.hdf5 exists; trains only when missing.")
+  MOFAobject.trained <- quiet_eval(initialise_and_run_mofa(mofa_list))
+
+  record_workflow(12L, "generate_sample_metadata", "ran", "Derived from MOFA sample names.")
+  metadata <- quiet_eval(generate_sample_metadata(colnames(mofa_list[[1]])))
+
+  record_workflow(13L, "assign_sample_metadata_to_mofa", "ran", "Attach metadata to model object.")
+  MOFAobject.trained <- quiet_eval(assign_sample_metadata_to_mofa(MOFAobject.trained, metadata))
+
+  record_workflow(14L, "define_group_colours", "ran", "Build group palettes.")
+  group.colors <- quiet_eval(define_group_colours(metadata))
+
+  record_workflow(15L, "define_view_colours", "ran", "Build view palettes.")
+  view.colors <- quiet_eval(define_view_colours(names(MOFAobject.trained@data)))
+
+  record_workflow(16L, "extract_kegg_weights", "ran", "Attach KEGG identifiers to factor weights.")
+  MOFAobject.trained <- quiet_eval(extract_kegg_weights(MOFAobject.trained, view_metadata, metabolite_annotation, gene_annotation))
+
+  record_workflow(17L, "run_limma_statistics", "ran", "Attach limma-style statistics to factor weights.")
+  MOFAobject.trained <- quiet_eval(run_limma_statistics(MOFAobject.trained, group.colors))
+
+  record_workflow(18L, "standardise_feature_names", "ran", "Create plotting-safe feature names.")
+  MOFAobject.trained.cleanNames <- quiet_eval(standardise_feature_names(MOFAobject.trained))
+
+  run_output_step(19L, "generate_mofa_variance_plots", step_outputs("generate_mofa_variance_plots"),
+                  generate_mofa_variance_plots(MOFAobject.trained, view.colors))
+  run_output_step(20L, "generate_mofa_factor_matrix_plot", step_outputs("generate_mofa_factor_matrix_plot"),
+                  generate_mofa_factor_matrix_plot(MOFAobject.trained, view.colors, group.colors))
+  run_output_step(21L, "generate_mofa_factor_comparison_plot", step_outputs("generate_mofa_factor_comparison_plot"),
+                  generate_mofa_factor_comparison_plot(MOFAobject.trained, group.colors, view.colors, metadata))
+  run_output_step(22L, "generate_mofa_factor_correlation_plot", step_outputs("generate_mofa_factor_correlation_plot"),
+                  generate_mofa_factor_correlation_plot(MOFAobject.trained, view.colors, sample_metadata))
+  run_output_step(23L, "save_weight_tables", step_outputs("save_weight_tables"),
+                  save_weight_tables(MOFAobject.trained, group.colors))
+  run_output_step(24L, "plot_scatter_pval_vs_weight", step_outputs("plot_scatter_pval_vs_weight"),
+                  plot_scatter_pval_vs_weight(view.colors))
+  run_output_step(25L, "plot_violin_pval_vs_weight", step_outputs("plot_violin_pval_vs_weight"),
+                  plot_violin_pval_vs_weight(view.colors))
+  run_output_step(26L, "plot_top_weights_heatmap_faceted_by_view", step_outputs("plot_top_weights_heatmap_faceted_by_view"),
+                  plot_top_weights_heatmap_faceted_by_view(MOFAobject.trained))
+
+  factors <- colnames(get_factors(MOFAobject.trained)[["group1"]])
+  factor_views <- names(MOFAobject.trained@expectations$W)
+
+  for (factor_name in factors) {
+    run_output_step(27L, paste("plot_top_weights_view", factor_name),
+                    file.path(results_dir, "Per_Factor_Analysis", factor_name, factor_views, "Top_Weights.png"),
+                    plot_top_weights_view(factor_name))
+    run_output_step(28L, paste("plot_top_weights_per_factor", factor_name),
+                    file.path(results_dir, "Per_Factor_Analysis", factor_name, "Top-weights-bar.png"),
+                    plot_top_weights_per_factor(factor_name, top_n = 10))
+    run_output_step(29L, paste("plot_scatter_per_view", factor_name),
+                    file.path(results_dir, "Per_Factor_Analysis", factor_name, factor_views, "scatterplots"),
+                    plot_scatter_per_view(factor_name))
+    run_output_step(30L, paste("plot_heatmap_per_view", factor_name),
+                    file.path(results_dir, "Per_Factor_Analysis", factor_name, factor_views, "Heatmap.png"),
+                    plot_heatmap_per_view(factor_name))
+    run_output_step(31L, paste("create_weight_outputs", factor_name),
+                    file.path(results_dir, "Per_Factor_Analysis", factor_name, "All_Weights.csv"),
+                    create_weight_outputs(factor_name, view_metadata))
+    run_output_step(32L, paste("factor_enrichment_outputs", factor_name),
+                    c(
+                      file.path(results_dir, "Per_Factor_Analysis", factor_name, "KEGG_Enrichment_Weighted.csv"),
+                      file.path(results_dir, "Per_Factor_Analysis", factor_name, "Top_100_edges_KEGG_cnet.png"),
+                      file.path(results_dir, "Per_Factor_Analysis", factor_name, "*", "FELLA_Enrichment_*.csv")
+                    ),
+                    {
+                      perform_kegg_enrichment(factor_name, MOFAobject.trained, view_metadata, TERM2GENE_list, TERM2NAME_list)
+                      plot_enrichment_network(factor_name, gene_annotation, metabolite_annotation, view.colors)
+                      generate_simple_pathway_graph(factor_name, view_metadata, MOFAobject.trained)
+                      run_fella_enrichment(factor_name, view_metadata, fella_list, TERM2GENE_list, MOFAobject.trained)
+                    })
+  }
+
+  workflow_steps$Present <- vapply(workflow_steps$Outputs, function(x) {
+    length(x) == 0 || all(vapply(x, path_present, logical(1)))
+  }, logical(1))
+  workflow_steps$Status <- ifelse(
+    lengths(workflow_steps$Outputs) == 0,
+    "object step",
+    ifelse(workflow_steps$Present, "present", "missing")
+  )
+  checkpoint_specs <- workflow_steps[lengths(workflow_steps$Outputs) > 0, c("Function", "ExpectedOutput", "Status", "Description")]
+  all_checkpoints_present <- all(checkpoint_specs$Status == "present")
+  terminal_progress_complete()
+} else {
+  record_workflow(0L, "report_render", "reported existing outputs", "Set run_analysis = TRUE to execute MOFA-CORE.R functions from this report.")
+}
+
+inventory <- make_inventory(results_dir)
+inventory$Factor <- vapply(inventory$Path, factor_from_path, character(1))
+inventory$View <- vapply(inventory$Path, view_from_path, character(1))
+image_inventory <- inventory[inventory$Type == "Image", , drop = FALSE]
+table_inventory <- inventory[inventory$Type == "Table", , drop = FALSE]
+non_image_inventory <- inventory[inventory$Type != "Image", , drop = FALSE]
+display_image_inventory <- image_inventory
+if (is.numeric(params$max_images) && is.finite(params$max_images) && params$max_images > 0) {
+  display_image_inventory <- head(image_inventory, params$max_images)
+}
+
+factor_dirs <- sort(unique(na.omit(inventory$Factor)))
+view_names <- sort(unique(na.omit(inventory$View)))
+section_counts <- sort(table(inventory$Section), decreasing = TRUE)
+type_counts <- sort(table(inventory$Type), decreasing = TRUE)
+total_size <- sum(inventory$Bytes, na.rm = TRUE)
+
+input_files <- data.frame(
+  Role = c("Runner", "Core workflow", "Input workbook", "Annotation cache", "Result tree", "Environment lockfile", "Pseudocode"),
+  File = c(runner, "MOFA-CORE.R", input_workbook, "Annotations", results_dir, "renv.lock", "PSEUDOCODE.md"),
+  Description = c(
+    "Top-level script that defines the workbook path, normalisation mode, result rebuild behaviour, and workflow source call.",
+    "Main analysis implementation containing environment setup, import, annotation, MOFA fitting, statistics, plotting, and enrichment steps.",
+    "Workbook containing view metadata, sample metadata, and the assay-specific data sheets used for the publication analysis.",
+    "Cached KEGG, lipid, and FELLA resources used to reduce external lookups during repeat renders.",
+    "Deposited output tree containing the trained model, figures, tables, pathway plots, and per-factor outputs.",
+    "Project package lockfile used to recreate the R package environment.",
+    "Plain-language workflow pseudocode and method references for manuscript support."
+  ),
+  stringsAsFactors = FALSE
+)
+input_files$Exists <- vapply(input_files$File, path_present, logical(1))
+input_files$Size <- vapply(input_files$File, function(x) {
+  if (dir.exists(x)) {
+    format_bytes(sum(file.info(list.files(x, recursive = TRUE, full.names = TRUE))$size, na.rm = TRUE))
+  } else if (file.exists(x)) {
+    format_bytes(file.info(x)$size)
+  } else {
+    ""
+  }
+}, character(1))
+input_files$Link <- vapply(input_files$File, link_file, character(1))
+
+table_metrics <- table_inventory
+if (nrow(table_metrics)) {
+  dims <- t(vapply(table_metrics$Path, safe_table_dims, integer(2)))
+  table_metrics$Rows <- dims[, "Rows"]
+  table_metrics$Columns <- dims[, "Columns"]
+}
+
+heading <- function(level, text, tabset = FALSE) {
+  cat("\n\n", paste(rep("#", level), collapse = ""), " ", text, if (tabset) " {.tabset}" else "", "\n\n", sep = "")
+}
+
+title_from_path <- function(path) {
+  gsub("_+", " ", basename(path))
+}
+
+immediate_child_dirs <- function(parent_dir) {
+  dirs <- unique(dirname(inventory$Path))
+  prefix <- paste0(parent_dir, "/")
+  children <- dirs[startsWith(dirs, prefix)]
+  children <- substring(children, nchar(prefix) + 1L)
+  children <- children[children != "" & !grepl("/", children, fixed = TRUE)]
+  sort(file.path(parent_dir, children))
+}
+
+files_exactly_in_dir <- function(dir) {
+  inventory[dirname(inventory$Path) == dir, , drop = FALSE]
+}
+
+files_under_dir <- function(dir) {
+  inventory[startsWith(inventory$Path, paste0(dir, "/")) | inventory$Path == dir, , drop = FALSE]
+}
+
+direct_image_rows <- function(dir) {
+  exact <- files_exactly_in_dir(dir)
+  exact[exact$Type == "Image", , drop = FALSE]
+}
+
+has_multiple_direct_images <- function(dir) {
+  nrow(direct_image_rows(dir)) > 1
+}
+
+directory_needs_tabs <- function(dir) {
+  length(immediate_child_dirs(dir)) > 0 || has_multiple_direct_images(dir)
+}
+
+image_tab_label <- function(path) {
+  stem <- tools::file_path_sans_ext(basename(path))
+  if (grepl("FactorFactor[0-9]+", stem)) {
+    return(sub(".*FactorFactor([0-9]+).*", "Factor \\1", stem))
+  }
+  if (grepl("Factor[0-9]+", stem)) {
+    return(sub(".*Factor([0-9]+).*", "Factor \\1", stem))
+  }
+  if (grepl("category_[0-9]+_vs_[0-9]+", stem)) {
+    return(sub(".*category_([0-9]+)_vs_([0-9]+).*", "Factor \\1 vs Factor \\2", stem))
+  }
+  cleaned <- sub("^category_", "", stem)
+  gsub("_+", " ", cleaned)
+}
+
+directory_note <- function(dir) {
+  switch(
+    dir,
+    "Results" = "Root-level outputs include the trained MOFA model and any files written directly into the result tree.",
+    "Results/Corrilation_and_Variance_plots" = "This directory contains the global MOFA summaries generated after model fitting: variance explained, factor-factor relationships, factor-sample relationships, and factor-covariate correlations.",
+    "Results/PCA" = "This directory contains factor projection and loading plots. It is produced during the global visualisation stage and helps show how samples and features distribute across pairs of latent factors.",
+    "Results/PCA/individual_data_loading_plots" = "These plots show pairwise factor-loading relationships for individual data views.",
+    "Results/PCA/individual_histograms" = "These density plots summarise factor-score distributions for individual latent factors.",
+    "Results/PCA/individual_sample_PCA_plots" = "These sample projection plots show how samples separate across factor pairs.",
+    "Results/Covariate_factor_comparisons" = "This directory contains outputs that compare latent factors with sample groups and experimental covariates.",
+    "Results/Covariate_factor_comparisons/individual_data_loading_plots" = "These plots compare feature-level mean signals with factor weights for individual factors.",
+    "Results/Covariate_factor_comparisons/individual_violin_plots" = "These violin plots show factor distributions across groups for individual factors.",
+    "Results/Significance_testing" = "This directory contains outputs that link statistical evidence to factor weights.",
+    "Results/Significance_testing/regression_testing" = "This directory contains regression and scatter summaries connecting p-values, weights, and model-level statistics.",
+    "Results/Significance_testing/regression_testing/individual_R2_barplots" = "These plots summarise R-squared relationships for individual factors.",
+    "Results/Significance_testing/regression_testing/individual_R2_scatter_plots" = "These plots show factor-specific scatter relationships between statistical evidence and model weights.",
+    "Results/Significance_testing/tables" = "This directory contains combined statistical and weight tables used for downstream interpretation.",
+    "Results/Significance_testing/violin_plots" = "This directory contains violin-plot summaries of significance-related outputs.",
+    "Results/Per_Factor_Analysis" = "This directory contains the main biological interpretation outputs. It is organised by latent factor, and then by data view within each factor.",
+    if (grepl("^Results/Per_Factor_Analysis/Factor[0-9]+$", dir)) {
+      paste0("This factor directory collects all outputs generated for ", title_from_path(dir), ": top-weight summaries, enrichment results, pathway plots, view-level heatmaps, and per-view scatter plots.")
+    } else if (grepl("^Results/Per_Factor_Analysis/Factor[0-9]+/", dir)) {
+      paste0("This view-level directory contains ", title_from_path(dir), " outputs for ", title_from_path(dirname(dir)), ", including heatmaps, top weights, scatter plots, and pathway or FELLA enrichment files where available.")
+    } else {
+      "This directory is part of the generated MOFA result tree."
+    }
+  )
+}
+
+render_table_preview <- function(path) {
+  ext <- tolower(tools::file_ext(path))
+  nrows <- if (isTRUE(params$full_tables)) -1 else params$table_rows_per_tab
+  preview <- tryCatch({
+    if (ext == "tsv") {
+      utils::read.delim(path, nrows = nrows, check.names = FALSE)
+    } else {
+      utils::read.csv(path, nrows = nrows, check.names = FALSE)
+    }
+  }, error = function(e) {
+    data.frame(Error = conditionMessage(e), stringsAsFactors = FALSE)
+  })
+  print(report_kable(preview, row.names = FALSE))
+}
+
+images_rendered <- 0L
+
+render_file_output <- function(row, level, include_heading = TRUE) {
+  path <- row$Path[[1]]
+  desc <- row$Description[[1]]
+  type <- row$Type[[1]]
+  if (include_heading) {
+    heading(level, title_from_path(path))
+  }
+  cat(desc, "\n\n", sep = "")
+  cat("Path: `", path, "`  \n", sep = "")
+  cat("Type: `", type, "`  \n", sep = "")
+  cat("Size: `", row$Size[[1]], "`\n\n", sep = "")
+
+  if (identical(type, "Image")) {
+    if (!is.finite(params$max_images) || images_rendered < params$max_images) {
+      images_rendered <<- images_rendered + 1L
+      cat('<figure class="output-figure">\n')
+      cat(sprintf('<div class="file-path">%s</div>\n', path))
+      cat(sprintf('<img src="%s" alt="%s">\n', path, desc))
+      cat(sprintf('<figcaption>%s</figcaption>\n', desc))
+      cat('</figure>\n\n')
+    } else {
+      cat("Image preview omitted because `max_images` has been reached. The file remains listed in the directory table.\n\n")
+    }
+  } else if (identical(type, "Table")) {
+    if (isTRUE(params$full_tables)) {
+      cat("Full table display. Larger tables are split into `", params$table_rows_per_tab, "`-row tabs in the rendered report.\n\n", sep = "")
+    } else {
+      cat("Table preview showing up to `", params$table_rows_per_tab, "` rows. Re-render with `--full-tables` to include all rows, split into `", params$table_rows_per_tab, "`-row tabs.\n\n", sep = "")
+    }
+    render_table_preview(path)
+    cat("\n\n")
+  }
+}
+
+render_directory_contents <- function(dir, level, image_tabs = FALSE) {
+  exact <- files_exactly_in_dir(dir)
+  recursive <- files_under_dir(dir)
+  image_rows <- exact[exact$Type == "Image", , drop = FALSE]
+  non_image_rows <- exact[exact$Type != "Image", , drop = FALSE]
+
+  if (image_tabs) {
+    heading(level, "Overview")
+  }
+
+  cat('<div class="method-note">')
+  cat(directory_note(dir))
+  cat('</div>\n\n')
+  cat(sprintf("Directory contains `%s` direct files and `%s` files including nested subdirectories.\n\n", nrow(exact), nrow(recursive)))
+  if (nrow(exact)) {
+    print(report_kable(
+      exact[, c("Path", "Type", "Factor", "View", "Size", "Description")],
+      row.names = FALSE,
+      caption = paste("Files directly in", dir)
+    ))
+    cat("\n\n")
+
+    rows_to_render <- if (image_tabs) non_image_rows else exact
+    if (nrow(rows_to_render)) {
+      for (i in seq_len(nrow(rows_to_render))) {
+        render_file_output(rows_to_render[i, , drop = FALSE], level + as.integer(image_tabs))
+      }
+    }
+
+    if (image_tabs && nrow(image_rows)) {
+      for (i in seq_len(nrow(image_rows))) {
+      heading(level, image_tab_label(image_rows$Path[[i]]))
+        render_file_output(image_rows[i, , drop = FALSE], level + 1L, include_heading = FALSE)
+      }
+    }
+  }
+}
+
+render_directory_tree <- function(dir, level = 3) {
+  children <- immediate_child_dirs(dir)
+  if (length(children)) {
+    heading(level, "Overview")
+    render_directory_contents(dir, level + 1)
+    for (child in children) {
+      grandchildren <- immediate_child_dirs(child)
+      heading(level, title_from_path(child), tabset = directory_needs_tabs(child))
+      if (length(grandchildren)) {
+        render_directory_tree(child, level + 1)
+      } else {
+        render_directory_contents(child, level + 1, image_tabs = has_multiple_direct_images(child))
+      }
+    }
+  } else {
+    render_directory_contents(dir, level, image_tabs = has_multiple_direct_images(dir))
+  }
+}
+```
+
+<style>
+.main-container {
+max-width: none !important;
+width: 100% !important;
+margin-left: 0 !important;
+margin-right: 0 !important;
+padding-left: 0 !important;
+padding-right: 0 !important;
+}
+.main-container > *:not(.report-header) {
+margin-left: 24px;
+margin-right: 24px;
+}
+body {
+width: 100%;
+font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 15px;
+line-height: 1.42857143;
+color: #2c3e50;
+background-color: #ffffff;
+}
+h1 {
+font-size: 34px;
+}
+h1.title {
+display: none;
+}
+h2 {
+font-size: 30px;
+}
+h3 {
+font-size: 24px;
+}
+h4 {
+font-size: 18px;
+}
+h5 {
+font-size: 16px;
+}
+h6 {
+font-size: 12px;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-weight: 400;
+line-height: 1.1;
+color: #2c3e50;
+}
+p,
+li,
+td,
+th,
+figcaption,
+.method-note,
+.summary-card {
+font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+code {
+color: inherit;
+background-color: rgba(0, 0, 0, 0.04);
+}
+.report-header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 2rem;
+background: #10263B;
+color: #ffffff;
+padding: 26px 32px;
+margin: 0 0 24px 0;
+}
+.report-header h1 {
+color: #ffffff;
+font-size: 34px;
+font-weight: 700;
+margin: 0 0 0.35rem 0;
+}
+.report-header p {
+color: #ffffff;
+font-size: 16px;
+margin: 0;
+max-width: 900px;
+}
+.report-kicker {
+color: #d6e0eb;
+font-size: 13px;
+font-weight: 700;
+letter-spacing: 0.04em;
+text-transform: uppercase;
+margin-bottom: 0.4rem;
+}
+.report-logo {
+display: block;
+width: 225px;
+max-width: 30vw;
+height: auto;
+flex: 0 0 auto;
+}
+@media (max-width: 760px) {
+  .report-header {
+  align-items: flex-start;
+  flex-direction: column-reverse;
+  padding: 20px 24px;
+  }
+  .report-logo {
+  max-width: 220px;
+  width: 60vw;
+  }
+}
+pre:not([class]) {
+background-color: white;
+}
+.tab-content {
+width: auto;
+}
+.nav-tabs {
+font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 15px;
+}
+.nav-tabs > li > a {
+color: #2c3e50;
+}
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:focus,
+.nav-tabs > li.active > a:hover {
+color: #2c3e50;
+font-weight: 700;
+}
+.section.level1,
+.section.level2,
+.section.level3,
+.section.level4 {
+width: auto;
+}
+.summary-card-container {
+display: flex;
+gap: 1rem;
+flex-wrap: wrap;
+margin-bottom: 1rem;
+}
+.summary-card {
+padding: 1rem;
+background: #f8f9fa;
+border: 1px solid #ddd;
+border-radius: 0.5rem;
+min-width: 190px;
+}
+.summary-card strong {
+font-weight: 700;
+}
+.summary-card span {
+font-size: 1.65rem;
+font-weight: 700;
+line-height: 1.2;
+color: #2c3e50;
+}
+.method-note {
+padding: 1rem;
+background: #f8f9fa;
+border-left: 4px solid #2c3e50;
+margin-bottom: 1rem;
+}
+.method-note p:last-child {
+margin-bottom: 0;
+}
+.download-link {
+display: inline-block;
+padding: 0.6rem 0.8rem;
+margin: 0.25rem 0.5rem 0.25rem 0;
+background: #2c3e50;
+color: #ffffff !important;
+border-radius: 0.4rem;
+text-decoration: none;
+font-weight: 600;
+}
+.download-link:hover {
+background: #1a252f;
+color: #ffffff !important;
+}
+.table-wrapper {
+width: 100%;
+overflow-x: auto;
+margin: 0.75rem 0 1rem 0;
+}
+table,
+table.report-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 0.95rem;
+}
+table caption,
+table.report-table caption {
+caption-side: top;
+text-align: left;
+font-weight: 600;
+color: #2c3e50;
+padding: 0 0 0.5rem 0;
+}
+table th,
+table td,
+table.report-table th,
+table.report-table td {
+text-align: left !important;
+vertical-align: top;
+padding: 0.55rem 0.7rem;
+border-top: 1px solid #d9dee3;
+}
+table thead th,
+table.report-table thead th {
+border-top: 0;
+border-bottom: 2px solid #c8d1db;
+background: #f8f9fa;
+font-weight: 600;
+}
+.paged-table {
+margin: 0.75rem 0 1.25rem 0;
+}
+.paged-table .nav-tabs {
+margin-bottom: 0.75rem;
+}
+.paged-table .tab-pane table {
+margin-bottom: 0;
+}
+.output-figure {
+margin: 1rem 0 1.5rem;
+}
+.output-figure img {
+max-width: 100%;
+height: auto;
+display: block;
+margin: 0.5rem 0;
+}
+.output-figure figcaption {
+margin-top: 0.5rem;
+color: #2c3e50;
+font-size: 0.95rem;
+}
+.file-path {
+font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+font-size: 0.9rem;
+color: #4b5563;
+margin-bottom: 0.4rem;
+overflow-wrap: anywhere;
+}
+</style>
+
+<script>
+function bootstrapStylePandocTables() {
+  if (window.jQuery) {
+    $('table').addClass('table table-striped table-condensed report-table');
+  }
+}
+
+function paginateReportTables(rowsPerPage) {
+  if (!window.jQuery) {
+    return;
+  }
+
+  $('table.report-table').each(function (tableIndex) {
+    var original = $(this);
+    if (original.closest('.paged-table').length) {
+      return;
+    }
+
+    var bodyRows = original.find('tbody tr');
+    if (bodyRows.length <= rowsPerPage) {
+      return;
+    }
+
+    var tableId = 'paged-report-table-' + tableIndex;
+    var wrapper = $('<div class="paged-table"></div>');
+    var tabs = $('<ul class="nav nav-tabs" role="tablist"></ul>');
+    var panes = $('<div class="tab-content"></div>');
+    var pageCount = Math.ceil(bodyRows.length / rowsPerPage);
+
+    for (var page = 0; page < pageCount; page++) {
+      var start = page * rowsPerPage;
+      var end = Math.min(start + rowsPerPage, bodyRows.length);
+      var paneId = tableId + '-page-' + page;
+      var activeClass = page === 0 ? ' active' : '';
+      var tabLabel = (start + 1) + '-' + end;
+
+      tabs.append(
+        '<li role="presentation" class="' + activeClass.trim() + '">' +
+        '<a href="#' + paneId + '" aria-controls="' + paneId + '" role="tab" data-toggle="tab">' +
+        tabLabel +
+        '</a></li>'
+      );
+
+      var pageTable = original.clone();
+      pageTable.find('tbody').empty();
+      bodyRows.slice(start, end).each(function () {
+        pageTable.find('tbody').append($(this).clone());
+      });
+
+      panes.append(
+        $('<div role="tabpanel" class="tab-pane' + activeClass + '" id="' + paneId + '"></div>').append(pageTable)
+      );
+    }
+
+    wrapper.append(tabs).append(panes);
+    original.replaceWith(wrapper);
+  });
+}
+
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+  paginateReportTables(`r params$table_rows_per_tab`);
+});
+</script>
+
+```{r report-header, results='asis'}
+cat(
+  '<div class="report-header">',
+  '<div>',
+  sprintf('<div class="report-kicker">UoN DRS MOFA | %s</div>', format(Sys.Date(), "%d %B %Y")),
+  '<h1>Digital Research Service</h1>',
+  '<p>MOFA-based multi-omics analysis.</p>',
+  '</div>',
+  '<img class="report-logo" src="https://www.nottingham.ac.uk/Brand/LegacyAssets/images-multimedia/2022/Logos/BrandEvolution-WhiteonNottinghamBlue-Cropped-450x173.png" alt="University of Nottingham logo">',
+  '</div>',
+  sep = "\n"
+)
+```
+
+# Publication archive report. {.tabset}
+
+## Overview
+
+This tab gives the report-level summary. It confirms what was present at render time, what the report decided to do about rerunning the workflow, and which output classes were detected.
+
+### Key statistics
+
+```{r overview-cards, results='asis'}
+cat('<div class="summary-card-container">')
+cat(sprintf('<div class="summary-card"><strong>Result files</strong><br /><span>%s</span></div>', nrow(inventory)))
+cat(sprintf('<div class="summary-card"><strong>Images</strong><br /><span>%s</span></div>', nrow(image_inventory)))
+cat(sprintf('<div class="summary-card"><strong>Tables</strong><br /><span>%s</span></div>', nrow(table_inventory)))
+cat(sprintf('<div class="summary-card"><strong>Latent factors detected</strong><br /><span>%s</span></div>', length(factor_dirs)))
+cat(sprintf('<div class="summary-card"><strong>Views detected in outputs</strong><br /><span>%s</span></div>', length(view_names)))
+cat(sprintf('<div class="summary-card"><strong>Result tree size</strong><br /><span>%s</span></div>', format_bytes(total_size)))
+cat('</div>')
+```
+
+### Key findings from the report inventory
+
+```{r key-findings, results='asis'}
+largest_section <- names(section_counts)[[1]]
+largest_type <- names(type_counts)[[1]]
+cat('<div class="method-note"><ul>')
+cat(sprintf('<li>The largest output section is <code>%s</code>, with %s files.</li>', largest_section, section_counts[[1]]))
+cat(sprintf('<li>The most common output type is <code>%s</code>, with %s files.</li>', largest_type, type_counts[[1]]))
+cat(sprintf('<li>The report found %s factor directories: %s.</li>', length(factor_dirs), paste(factor_dirs, collapse = ", ")))
+cat(sprintf('<li>The report found %s named data views in output paths: %s.</li>', length(view_names), paste(view_names, collapse = ", ")))
+cat(sprintf('<li>Checkpoint status: %s of %s output-producing workflow steps are present.</li>', sum(checkpoint_specs$Status == "present"), nrow(checkpoint_specs)))
+cat(sprintf('<li>Analysis action during this render: <code>%s</code>.</li>', analysis_action))
+cat('</ul></div>')
+```
+
+### Run mode
+
+```{r run-mode, results='asis'}
+cat("The report was rendered with `run_analysis = ", params$run_analysis, "`.\n\n", sep = "")
+cat("The report was rendered with `skip_existing = ", params$skip_existing, "`.\n\n", sep = "")
+cat("The report was rendered with `full_tables = ", params$full_tables, "`.\n\n", sep = "")
+cat("Analysis action: `", analysis_action, "`.\n\n", sep = "")
+if (startsWith(analysis_action, "executed")) {
+  cat("The MOFA-CORE.R function chain was executed before this report was generated.\n")
+} else if (grepl("^skipped", analysis_action)) {
+  cat("The output-producing function blocks were skipped because representative outputs were already present.\n")
+} else {
+  cat("The MOFA-CORE.R function chain was not executed during this render. The report describes the existing `Results/` directory.\n")
+}
+```
+
+### Input data and core files
+
+The analysis is driven by one manuscript workbook, cached annotation resources, the R workflow code, and the result tree. The table below confirms whether those files or directories were present when the report was rendered.
+
+```{r input-files}
+report_kable(
+  input_files[, c("Role", "Link", "Description", "Exists", "Size")],
+  row.names = FALSE,
+  escape = FALSE,
+  col.names = c("Role", "File", "Description", "Exists", "Size"),
+  caption = "Core files and directories used by the report and workflow."
+)
+```
+
+## Results {.tabset}
+
+### Execution Flow
+
+This tab follows the execution order in `MOFA-CORE.R`. The first steps build R objects in memory: metadata tables, cleaned view matrices, annotations, normalised MOFA inputs, and the trained model object. Later steps write files and directories under `Results/`.
+
+When `run_analysis = TRUE`, this report sources the function definitions from `MOFA-CORE.R` and executes this workflow directly. For output-producing steps, `skip_existing = TRUE` means the step is skipped when the mapped output files or directories already exist. This avoids rerunning plotting and enrichment functions when the result tree is already populated.
+
+#### Workflow plan
+
+```{r workflow-plan}
+workflow_display <- workflow_steps[, c("Order", "Phase", "Function", "ExpectedOutput", "Status", "Description")]
+report_kable(
+  workflow_display,
+  row.names = FALSE,
+  caption = "Execution plan derived from the MOFA-CORE.R workflow and expected output locations."
+)
+```
+
+#### Render-time execution log
+
+This table records what this report did during rendering. With the default parameters it only reports existing outputs. If `run_analysis = TRUE`, it records each function block that ran or was skipped.
+
+```{r workflow-log}
+report_kable(
+  workflow_log,
+  row.names = FALSE,
+  caption = "Execution actions taken during this report render."
+)
+```
+
+#### Functions detected in MOFA-CORE.R
+
+```{r detected-core-functions}
+report_kable(
+  data.frame(Function = core_function_names),
+  row.names = FALSE,
+  caption = "Function definitions detected in MOFA-CORE.R."
+)
+```
+
+```{r result-directory-tabs, results='asis'}
+execution_order_dirs <- c(
+  file.path(results_dir, "Corrilation_and_Variance_plots"),
+  file.path(results_dir, "PCA"),
+  file.path(results_dir, "Covariate_factor_comparisons"),
+  file.path(results_dir, "Significance_testing"),
+  file.path(results_dir, "Per_Factor_Analysis")
+)
+
+for (dir in execution_order_dirs) {
+  if (!dir.exists(dir)) {
+    next
+  }
+  heading(3, title_from_path(dir), tabset = directory_needs_tabs(dir))
+  render_directory_tree(dir, level = 4)
+}
+```
+
+## Analysis information {.tabset}
+
+### Methods
+
+#### Analytical framework
+
+This report documents a reusable multi-omics factor analysis workflow. The workbook contains multiple assay views. The workflow aligns those views by sample, normalises the matrices, and fits a MOFA model. MOFA learns latent factors: hidden axes of variation that summarise coordinated structure across the data views.
+
+The interpretation layer then asks three practical questions:
+
+- Which samples and sample groups are separated by each factor?
+- Which features carry the strongest positive or negative weights on each factor?
+- Which pathways or biological networks are enriched among the strongest factor-associated features?
+
+#### Input processing
+
+The workbook is controlled by `view_metadata` and `sample_metadata`. `view_metadata` identifies the active views and provides the view-level metadata needed for import and annotation. `sample_metadata` provides sample-level information used for normalisation and factor comparison.
+
+Each active data sheet is read into R, cleaned, and added to a named list of view matrices. The workflow expects feature identifiers in the first column and sample IDs in the remaining columns. The same sample layout must be maintained across active views.
+
+#### Annotation resources
+
+The workflow uses cached annotation resources where possible. Lipid names are standardised with Goslin/rgoslin logic. KEGG resources are used to connect genes and metabolites to pathways. FELLA resources provide pathway-network and diffusion-based enrichment support.
+
+The cached `Annotations/` tree is important for reproducibility. If it is removed, the workflow may need network access and regenerated pathway resources may differ if external databases have changed.
+
+#### MOFA modelling
+
+The normalised view matrices are passed to MOFA. The trained model is saved as `Results/Full_MOFA_model.hdf5`. Global outputs describe variance explained, factor correlations, and covariate associations. Per-factor outputs then turn each latent factor into feature-level and pathway-level summaries.
+
+When `run_analysis = TRUE`, this report does not call a project-specific runner as a single black-box process. It sources the function definitions from `MOFA-CORE.R`, builds the in-memory objects in the same execution order, and maps output-generating functions to the files and directories they write.
+
+#### Output interpretation
+
+High absolute feature weights identify features that contribute strongly to a factor. Positive and negative weights represent opposite directions along the same latent axis. Enrichment outputs should be read as interpretation aids rather than independent validation of the factor. The most robust interpretation comes from reading factor projections, top-weight plots, heatmaps, and pathway enrichment together.
+
+#### References
+
+[1] Argelaguet, R., Velten, B., Arnol, D., et al. Multi-Omics Factor Analysis - a framework for unsupervised integration of multi-omics data sets. *Molecular Systems Biology* 14(6):e8124 (2018). DOI: 10.15252/msb.20178124
+
+[2] Argelaguet, R., Cuomo, A. S. E., Stegle, O., et al. MOFA+: a statistical framework for comprehensive integration of multi-modal single-cell data. *Genome Biology* 21:111 (2020). DOI: 10.1186/s13059-020-02015-1
+
+[3] Kanehisa, M. and Goto, S. KEGG: Kyoto Encyclopedia of Genes and Genomes. *Nucleic Acids Research* 28(1):27-30 (2000). DOI: 10.1093/nar/28.1.27
+
+[4] Ritchie, M. E., Phipson, B., Wu, D., et al. limma powers differential expression analyses for RNA-sequencing and microarray studies. *Nucleic Acids Research* 43(7):e47 (2015). DOI: 10.1093/nar/gkv007
+
+[5] Luo, W. and Brouwer, C. Pathview: an R/Bioconductor package for pathway-based data integration and visualization. *Bioinformatics* 29(14):1830-1831 (2013). DOI: 10.1093/bioinformatics/btt285
+
+[6] Yu, G., Wang, L.-G., Han, Y., and He, Q.-Y. clusterProfiler: an R package for comparing biological themes among gene clusters. *OMICS* 16(5):284-287 (2012). DOI: 10.1089/omi.2011.0118
+
+[7] Castellano-Escuder, P., Andres-Leon, E., Rojas, A., and Gajardo-Vinas, S. FELLA: an R package to enrich metabolomics data. *BMC Bioinformatics* 20:22 (2019). DOI: 10.1186/s12859-018-2566-9
+
+[8] Kopczynski, D., Hoffmann, N., Peng, B., and Ahrends, R. Goslin: A Grammar of Succinct Lipid Nomenclature. *Analytical Chemistry* 92(16):10957-10960 (2020). DOI: 10.1021/acs.analchem.0c01690
+
+[9] Maeda, N., et al. ggkegg: analysis and visualization of KEGG data utilizing the grammar of graphics. *Bioinformatics* 39(10):btad622 (2023). DOI: 10.1093/bioinformatics/btad622
+
+[10] Love, M. I., Huber, W., and Anders, S. Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2. *Genome Biology* 15:550 (2014). DOI: 10.1186/s13059-014-0550-8
+
+[11] Gu, Z., Eils, R., and Schlesner, M. Complex heatmaps reveal patterns and correlations in multidimensional genomic data. *Bioinformatics* 32(18):2847-2849 (2016). DOI: 10.1093/bioinformatics/btw313
+
+### Session notes
+
+This tab records the R session used to render the report. It supports troubleshooting and helps reviewers identify package-version differences between render environments.
+
+```{r session-info}
+sessionInfo()
+```
+
+### File inventory
+
+This tab lists every file found under `Results/` at render time. It is the report-level index for the deposited output tree.
+
+```{r complete-inventory}
+report_kable(
+  transform(
+    inventory[, c("Path", "Section", "Type", "Factor", "View", "Size", "Modified", "Description")],
+    Link = vapply(Path, link_file, character(1))
+  )[, c("Link", "Path", "Section", "Type", "Factor", "View", "Size", "Modified", "Description")],
+  row.names = FALSE,
+  escape = FALSE,
+  col.names = c("File", "Path", "Section", "Type", "Factor", "View", "Size", "Modified", "Description"),
+  caption = "Complete inventory of files under Results."
+)
+```
+
+### Re-rendering
+
+Render the report from the repository root using the existing result tree:
+
+```bash
+Rscript MOFA-report-runner.R
+```
+
+Render the report and execute the `MOFA-CORE.R` function chain, skipping output blocks that already have mapped outputs:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis
+```
+
+Force a full rerun even when checkpoint outputs exist:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis --force
+```
+
+Use the updated normalisation branch rather than the legacy publication branch:
+
+```bash
+Rscript MOFA-report-runner.R --run-analysis --new-normalisation
+```
+
+The default report render reads the existing `Results/` tree and creates directory-matched tabs. Analysis execution only occurs when `--run-analysis` is supplied.
