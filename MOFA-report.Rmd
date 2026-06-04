@@ -642,11 +642,27 @@ if (nrow(table_metrics)) {
 }
 
 heading <- function(level, text, tabset = FALSE) {
+  level <- min(as.integer(level), 6L)
   cat("\n\n", paste(rep("#", level), collapse = ""), " ", text, if (tabset) " {.tabset}" else "", "\n\n", sep = "")
 }
 
 title_from_path <- function(path) {
   gsub("_+", " ", basename(path))
+}
+
+html_escape <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  x <- gsub(">", "&gt;", x, fixed = TRUE)
+  x <- gsub('"', "&quot;", x, fixed = TRUE)
+  x
+}
+
+tabset_counter <- 0L
+
+next_tabset_id <- function(prefix = "nested-tabs") {
+  tabset_counter <<- tabset_counter + 1L
+  paste0(prefix, "-", tabset_counter)
 }
 
 immediate_child_dirs <- function(parent_dir) {
@@ -774,7 +790,7 @@ render_file_output <- function(row, level, include_heading = TRUE) {
   }
 }
 
-render_directory_contents <- function(dir, level, image_tabs = FALSE) {
+render_directory_contents <- function(dir, level, image_tabs = FALSE, render_direct_images = TRUE) {
   exact <- files_exactly_in_dir(dir)
   recursive <- files_under_dir(dir)
   image_rows <- exact[exact$Type == "Image", , drop = FALSE]
@@ -796,7 +812,7 @@ render_directory_contents <- function(dir, level, image_tabs = FALSE) {
     ))
     cat("\n\n")
 
-    rows_to_render <- if (image_tabs) non_image_rows else exact
+    rows_to_render <- if (image_tabs || !render_direct_images) non_image_rows else exact
     if (nrow(rows_to_render)) {
       for (i in seq_len(nrow(rows_to_render))) {
         render_file_output(rows_to_render[i, , drop = FALSE], level + as.integer(image_tabs))
@@ -812,22 +828,77 @@ render_directory_contents <- function(dir, level, image_tabs = FALSE) {
   }
 }
 
+render_html_tabset <- function(tab_items) {
+  tabset_id <- next_tabset_id()
+  cat(sprintf('<div class="nested-tabset" id="%s">\n', tabset_id))
+  cat('<ul class="nav nav-tabs" role="tablist">\n')
+  for (i in seq_along(tab_items)) {
+    tab_id <- paste0(tabset_id, "-tab-", i)
+    active <- if (i == 1L) " class=\"active\"" else ""
+    cat(sprintf(
+      '<li role="presentation"%s><a href="#%s" aria-controls="%s" role="tab" data-toggle="tab">%s</a></li>\n',
+      active,
+      tab_id,
+      tab_id,
+      html_escape(tab_items[[i]]$label)
+    ))
+  }
+  cat('</ul>\n')
+  cat('<div class="tab-content">\n')
+  for (i in seq_along(tab_items)) {
+    tab_id <- paste0(tabset_id, "-tab-", i)
+    active <- if (i == 1L) " active" else ""
+    cat(sprintf('<div role="tabpanel" class="tab-pane%s" id="%s">\n', active, tab_id))
+    tab_items[[i]]$render()
+    cat('</div>\n')
+  }
+  cat('</div>\n')
+  cat('</div>\n\n')
+}
+
 render_directory_tree <- function(dir, level = 3) {
   children <- immediate_child_dirs(dir)
-  if (length(children)) {
-    heading(level, "Overview")
-    render_directory_contents(dir, level + 1)
+  image_rows <- direct_image_rows(dir)
+  use_image_tabs <- nrow(image_rows) > 1
+
+  if (length(children) || use_image_tabs) {
+    tab_items <- list(
+      list(
+        label = "Overview",
+        render = function() render_directory_contents(
+          dir,
+          level = level + 1L,
+          image_tabs = FALSE,
+          render_direct_images = !use_image_tabs
+        )
+      )
+    )
+
     for (child in children) {
-      grandchildren <- immediate_child_dirs(child)
-      heading(level, title_from_path(child), tabset = directory_needs_tabs(child))
-      if (length(grandchildren)) {
-        render_directory_tree(child, level + 1)
-      } else {
-        render_directory_contents(child, level + 1, image_tabs = has_multiple_direct_images(child))
+      tab_items[[length(tab_items) + 1L]] <- list(
+        label = title_from_path(child),
+        render = local({
+          child_dir <- child
+          function() render_directory_tree(child_dir, level = level + 1L)
+        })
+      )
+    }
+
+    if (use_image_tabs) {
+      for (i in seq_len(nrow(image_rows))) {
+        tab_items[[length(tab_items) + 1L]] <- list(
+          label = image_tab_label(image_rows$Path[[i]]),
+          render = local({
+            row <- image_rows[i, , drop = FALSE]
+            function() render_file_output(row, level = level + 1L, include_heading = FALSE)
+          })
+        )
       }
     }
+
+    render_html_tabset(tab_items)
   } else {
-    render_directory_contents(dir, level, image_tabs = has_multiple_direct_images(dir))
+    render_directory_contents(dir, level, image_tabs = FALSE)
   }
 }
 ```
@@ -964,6 +1035,15 @@ color: #2c3e50;
 .nav-tabs > li.active > a:hover {
 color: #2c3e50;
 font-weight: 700;
+}
+.nested-tabset {
+margin: 1rem 0 1.5rem 0;
+}
+.nested-tabset .nested-tabset {
+margin-top: 1rem;
+}
+.nested-tabset > .tab-content {
+padding-top: 1rem;
 }
 .section.level1,
 .section.level2,
@@ -1280,7 +1360,7 @@ for (dir in execution_order_dirs) {
   if (!dir.exists(dir)) {
     next
   }
-  heading(3, title_from_path(dir), tabset = directory_needs_tabs(dir))
+  heading(3, title_from_path(dir), tabset = FALSE)
   render_directory_tree(dir, level = 4)
 }
 ```

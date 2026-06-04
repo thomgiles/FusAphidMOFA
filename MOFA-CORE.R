@@ -471,77 +471,155 @@ annotate_transcriptomic_data_with_kegg <- function(
     data_list,
     TERM2GENE_list,
     view_metadata,
-    outdir = "Annotations"
+    Ensembl_dataset = NULL,
+    Ensembl_mart = "plants_mart",
+    Ensembl_host = "https://plants.ensembl.org",
+    outdir = "Annotations",
+    force_refresh = FALSE
 ) {
-  # Derive transcriptomic sheets from view_metadata
-  transcriptomic_sheets <- subset(view_metadata, Active == "Y" & Type == "RNAseq", select = View)$View
+  
+  dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+  gene_annotation <- list()
+  
+  transcriptomic_sheets <- subset(
+    view_metadata,
+    Active == "Y" & Type == "RNAseq",
+    select = View
+  )$View
+  
   if (length(transcriptomic_sheets) == 0) {
     warning("No active transcriptomic views found in view_metadata.")
     return(NULL)
   }
   
-  dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
-  gene_annotation <- list()
-  
-  # Collect all unique genes across transcriptomic sheets
-  gene_list <- unlist(lapply(transcriptomic_sheets, function(sheet) {
+  gene_df <- do.call(rbind, lapply(transcriptomic_sheets, function(sheet) {
     genes <- rownames(data_list[[sheet]])
-    gsub(paste0("_", sheet), "", genes)
+    
+    data.frame(
+      gene_ID = genes,
+      clean_gene = gsub("\\.\\d+$", "", genes),
+      stringsAsFactors = FALSE
+    )
   }))
-  gene_list <- unique(gene_list)
-  message("Total unique gene identifiers to annotate: ", length(gene_list))
   
-  # Extract KEGG species associated with transcriptomic views
+  gene_df <- unique(gene_df)
+  
+  message("Total unique input gene identifiers: ", length(unique(gene_df$clean_gene)))
+  
   transcriptomic_species <- unique(na.omit(subset(
     view_metadata,
     View %in% transcriptomic_sheets & Type == "RNAseq",
     select = Kegg_Species
   )$Kegg_Species))
   
-  # Flatten comma-separated species
   transcriptomic_species <- unique(unlist(strsplit(transcriptomic_species, ",")))
+  transcriptomic_species <- trimws(transcriptomic_species)
+  transcriptomic_species <- transcriptomic_species[transcriptomic_species != ""]
   
   if (length(transcriptomic_species) == 0) {
-    warning("No KEGG species codes found in view_metadata for transcriptomic views.")
+    warning("No KEGG species codes found in view_metadata.")
     return(NULL)
   }
   
-  # Loop over species
+  if (!is.null(Ensembl_dataset)) {
+    
+    if (!requireNamespace("biomaRt", quietly = TRUE)) {
+      stop("Package 'biomaRt' is required. Install with: BiocManager::install('biomaRt')")
+    }
+    
+    message("Mapping input gene IDs using BioMart dataset: ", Ensembl_dataset)
+    
+    mart <- biomaRt::useEnsemblGenomes(
+      biomart = Ensembl_mart,
+      dataset = Ensembl_dataset,
+      host = Ensembl_host
+    )
+    
+    gene_id_map <- biomaRt::getBM(
+      attributes = c("ensembl_gene_id", "entrezgene_id"),
+      filters = "ensembl_gene_id",
+      values = unique(gene_df$clean_gene),
+      mart = mart
+    )
+    
+    colnames(gene_id_map) <- c("clean_gene", "mapped_gene")
+    
+    gene_id_map$clean_gene <- as.character(gene_id_map$clean_gene)
+    gene_id_map$mapped_gene <- as.character(gene_id_map$mapped_gene)
+    
+    gene_id_map$clean_gene <- gsub("\\.\\d+$", "", gene_id_map$clean_gene)
+    gene_id_map$mapped_gene <- gsub("^.*:", "", gene_id_map$mapped_gene)
+    
+    gene_id_map <- gene_id_map[
+      !is.na(gene_id_map$clean_gene) &
+        gene_id_map$clean_gene != "" &
+        !is.na(gene_id_map$mapped_gene) &
+        gene_id_map$mapped_gene != "",
+      ,
+      drop = FALSE
+    ]
+    
+    gene_id_map <- unique(gene_id_map)
+    
+    message("BioMart mappings found: ", nrow(gene_id_map))
+    message("Unique mapped input genes: ", length(unique(gene_id_map$clean_gene)))
+    
+    gene_df <- merge(
+      gene_df,
+      gene_id_map,
+      by = "clean_gene",
+      all.x = TRUE
+    )
+    
+    gene_df$mapped_gene[is.na(gene_df$mapped_gene)] <- gene_df$clean_gene[is.na(gene_df$mapped_gene)]
+    
+  } else {
+    gene_df$mapped_gene <- gene_df$clean_gene
+  }
+  
   for (sp in transcriptomic_species) {
-    message("Annotating genes for species: ", sp)
+    
+    message("Annotating genes for KEGG species: ", sp)
+    
     output_file <- file.path(outdir, paste0("KEGG_gene_annotations_", sp, ".csv"))
     
-    # If cached, load and return
-    if (file.exists(output_file)) {
+    if (file.exists(output_file) && !force_refresh) {
       message("Loading existing gene annotations for ", sp, " from file.")
       gene_annotation[[sp]] <- utils::read.csv(output_file, stringsAsFactors = FALSE)
       next
-    } else {
-      # Extract KEGG TERM2GENE table for this species
-      if (!("gene" %in% names(TERM2GENE_list[[sp]]))) {
-        warning("No gene TERM2GENE entry for species ", sp)
-        next
-      }
-      kegg_df <- TERM2GENE_list[[sp]]$gene
-      kegg_df$EntrezID <- sub(paste0("^", sp, ":"), "", kegg_df$KEGG_ID)
-      
-      # Assume input genes are already Entrez IDs
-      ann <- merge(
-        data.frame(gene = gene_list, stringsAsFactors = FALSE),
-        kegg_df,
-        by.x = "gene",
-        by.y = "EntrezID"
-      )
-      ann <- ann[, c("gene", "KEGG_ID")]
-      
-      message("Matched KEGG IDs for ", nrow(ann), " genes in ", sp)
-      utils::write.csv(ann, output_file, row.names = FALSE)
-      gene_annotation[[sp]] <- ann
-      
     }
+    
+    kegg_df <- TERM2GENE_list[[sp]]$gene
+    
+    kegg_df$mapped_gene <- as.character(kegg_df$KEGG_ID)
+    kegg_df$mapped_gene <- gsub(paste0("^", sp, ":"), "", kegg_df$mapped_gene)
+    kegg_df$mapped_gene <- gsub("^ncbi-geneid:", "", kegg_df$mapped_gene)
+    kegg_df$mapped_gene <- gsub("^NCBI-GeneID:", "", kegg_df$mapped_gene)
+    kegg_df$mapped_gene <- gsub("^GeneID:", "", kegg_df$mapped_gene)
+    
+    gene_df$mapped_gene <- as.character(gene_df$mapped_gene)
+    kegg_df$mapped_gene <- as.character(kegg_df$mapped_gene)
+    
+    message(
+      "Mapped IDs overlapping KEGG IDs for ", sp, ": ",
+      length(intersect(unique(gene_df$mapped_gene), unique(kegg_df$mapped_gene)))
+    )
+    
+    ann <- merge(
+      gene_df,
+      kegg_df,
+      by = "mapped_gene"
+    )
+    
+    ann <- unique(ann[, c("gene", "KEGG_ID")])
+    
+    message("Matched KEGG gene rows for ", sp, ": ", nrow(ann))
+    message("Unique matched input genes for ", sp, ": ", length(unique(ann$gene_ID)))
+    
+    utils::write.csv(ann, output_file, row.names = FALSE)
+    
+    gene_annotation[[sp]] <- ann
   }
-  
-
   
   return(gene_annotation)
 }
